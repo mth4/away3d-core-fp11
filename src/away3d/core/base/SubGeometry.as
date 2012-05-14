@@ -301,6 +301,13 @@
 					index--;
 				}
 			
+			// if not found, in some cases it should be automatically generated
+			switch(usage)
+			{
+				case VertexBufferUsages.NORMALS: return normalsProxy.selectors[0];
+				case VertexBufferUsages.TANGENTS: return tangentsProxy.selectors[0];
+			}
+			
 			return null;
 		}
 		
@@ -507,7 +514,7 @@
 		/**
 		 * The raw texture coordinate data. Will not work correctly if uv buffer is ComplexVertexBufferProxy.
 		 */
-		[Deprecated(replacement="getVertexBufferSelector(UV, 1).bufferProxy.data")]
+		[Deprecated(replacement="getVertexBufferSelector(UV, 1).bufferData")]
 		public function get secondaryUVData() : Vector.<Number>
 		{
 			var buff:VertexBufferSelector = getUVBufferSelector(1);
