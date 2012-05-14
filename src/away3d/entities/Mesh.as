@@ -161,7 +161,7 @@
 		 */
 		public function get animation() : AnimationBase
 		{
-			return _geometry.animation;
+			return _geometry != null ? _geometry.animation : null;
 		}
 
 		/**
@@ -212,7 +212,8 @@
 		 */
 		override protected function updateBounds() : void
 		{
-			_bounds.fromGeometry(_geometry);
+			if(_geometry != null)
+				_bounds.fromGeometry(_geometry);
 			_boundsInvalid = false;
 		}
 
