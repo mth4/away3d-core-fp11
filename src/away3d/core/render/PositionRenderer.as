@@ -1,12 +1,13 @@
 package away3d.core.render
 {
 	import away3d.core.base.IRenderable;
+	import away3d.core.base.buffers.VertexBufferUsages;
 	import away3d.core.data.RenderableListItem;
 	import away3d.core.traverse.EntityCollector;
 	import away3d.debug.Debug;
-
+	
 	import com.adobe.utils.AGALMiniAssembler;
-
+	
 	import flash.display3D.Context3D;
 	import flash.display3D.Context3DBlendFactor;
 	import flash.display3D.Context3DCompareMode;
@@ -56,9 +57,9 @@ package away3d.core.render
 			item = entityCollector.opaqueRenderableHead;
 			while (item) {
 				renderable = item.renderable;
-				_stage3DProxy.setSimpleVertexBuffer(0, renderable.getVertexBuffer(_stage3DProxy), Context3DVertexBufferFormat.FLOAT_3, renderable.vertexBufferOffset);
+				_stage3DProxy.setVertexBufferSelector(0, renderable.getVertexBufferSelector(VertexBufferUsages.POSITIONS));
 				_context.setProgramConstantsFromMatrix(Context3DProgramType.VERTEX, 0, renderable.getModelViewProjectionUnsafe(), true);
-				_context.drawTriangles(renderable.getIndexBuffer(_stage3DProxy), 0, renderable.numTriangles);
+				_context.drawTriangles(renderable.getIndexBufferProxy().getBuffer(_stage3DProxy), 0, renderable.numTriangles);
 				item = item.next;
 			}
 
@@ -67,9 +68,9 @@ package away3d.core.render
 			item = entityCollector.blendedRenderableHead;
 			while (item) {
 				renderable = item.renderable;
-				_stage3DProxy.setSimpleVertexBuffer(0, renderable.getVertexBuffer(_stage3DProxy), Context3DVertexBufferFormat.FLOAT_3, renderable.vertexBufferOffset);
+				_stage3DProxy.setVertexBufferSelector(0, renderable.getVertexBufferSelector(VertexBufferUsages.POSITIONS));
 				_context.setProgramConstantsFromMatrix(Context3DProgramType.VERTEX, 0, renderable.getModelViewProjectionUnsafe(), true);
-				_context.drawTriangles(renderable.getIndexBuffer(_stage3DProxy), 0, renderable.numTriangles);
+				_context.drawTriangles(renderable.getIndexBufferProxy().getBuffer(_stage3DProxy), 0, renderable.numTriangles);
 				item = item.next;
 			}
 		}

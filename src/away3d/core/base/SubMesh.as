@@ -4,11 +4,14 @@ package away3d.core.base
 	import away3d.animators.data.AnimationBase;
 	import away3d.animators.data.AnimationStateBase;
 	import away3d.arcane;
+	import away3d.core.base.buffers.IndexBufferProxy;
+	import away3d.core.base.buffers.VertexBufferProxy;
+	import away3d.core.base.buffers.VertexBufferSelector;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.entities.Entity;
 	import away3d.entities.Mesh;
 	import away3d.materials.MaterialBase;
-
+	
 	import flash.display3D.IndexBuffer3D;
 	import flash.display3D.VertexBuffer3D;
 	import flash.geom.Matrix;
@@ -158,41 +161,13 @@ package away3d.core.base
 		public function get inverseSceneTransform():Matrix3D {
 			return _parentMesh.inverseSceneTransform;
 		}
-
+		
 		/**
-		 * Retrieves the VertexBuffer3D object that contains vertex positions.
-		 * @param context The Context3D for which we request the buffer
-		 * @return The VertexBuffer3D object that contains vertex positions.
+		 * Retrieves a vertex buffer selector that corresponds to the passed parameters.
 		 */
-		public function getVertexBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			return _subGeometry.getVertexBuffer( stage3DProxy );
-		}
-
-		/**
-		 * Retrieves the VertexBuffer3D object that contains vertex normals.
-		 * @param context The Context3D for which we request the buffer
-		 * @return The VertexBuffer3D object that contains vertex normals.
-		 */
-		public function getVertexNormalBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			return _subGeometry.getVertexNormalBuffer( stage3DProxy );
-		}
-
-		/**
-		 * Retrieves the VertexBuffer3D object that contains vertex tangents.
-		 * @param context The Context3D for which we request the buffer
-		 * @return The VertexBuffer3D object that contains vertex tangents.
-		 */
-		public function getVertexTangentBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			return _subGeometry.getVertexTangentBuffer( stage3DProxy );
-		}
-
-		/**
-		 * Retrieves the VertexBuffer3D object that contains texture coordinates.
-		 * @param context The Context3D for which we request the buffer
-		 * @return The VertexBuffer3D object that contains texture coordinates.
-		 */
-		public function getUVBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			return _subGeometry.getUVBuffer( stage3DProxy );
+		public function getVertexBufferSelector(usage:String, index:uint=0):VertexBufferSelector
+		{
+			return _subGeometry.getVertexBufferSelector(usage, index);
 		}
 
 		/**
@@ -200,8 +175,8 @@ package away3d.core.base
 		 * @param context The Context3D for which we request the buffer
 		 * @return The VertexBuffer3D object that contains triangle indices.
 		 */
-		public function getIndexBuffer( stage3DProxy:Stage3DProxy ):IndexBuffer3D {
-			return _subGeometry.getIndexBuffer( stage3DProxy );
+		public function getIndexBufferProxy():IndexBufferProxy {
+			return _subGeometry.indexBufferProxy;
 		}
 
 		/**
@@ -279,55 +254,9 @@ package away3d.core.base
 			_uvTransformDirty = false;
 		}
 
-		public function getSecondaryUVBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			return _subGeometry.getSecondaryUVBuffer( stage3DProxy );
-		}
-
-		public function getCustomBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
-		{
-			return _subGeometry.getCustomBuffer(stage3DProxy);
-		}
-
 		public function dispose() : void
 		{
 			material = null;
-		}
-
-		public function get vertexBufferOffset() : int
-		{
-			return _subGeometry.vertexBufferOffset;
-		}
-
-		public function get normalBufferOffset() : int
-		{
-			return _subGeometry.normalBufferOffset;
-		}
-
-		public function get tangentBufferOffset() : int
-		{
-			return _subGeometry.tangentBufferOffset;
-		}
-
-		public function get UVBufferOffset() : int
-		{
-			return _subGeometry.UVBufferOffset;
-		}
-
-		public function get secondaryUVBufferOffset() : int
-		{
-			return _subGeometry.secondaryUVBufferOffset;
-		}
-
-		public function get vertexData():Vector.<Number> {
-			return _subGeometry.vertexData;
-		}
-
-		public function get indexData():Vector.<uint> {
-			return _subGeometry.indexData;
-		}
-
-		public function get UVData():Vector.<Number> {
-			return _subGeometry.UVData;
 		}
 	}
 }

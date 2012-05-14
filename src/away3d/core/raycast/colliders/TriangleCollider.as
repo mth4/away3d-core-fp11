@@ -3,7 +3,8 @@ package away3d.core.raycast.colliders
 
 	import away3d.core.base.IRenderable;
 	import away3d.core.base.SubMesh;
-
+	import away3d.core.base.buffers.VertexBufferUsages;
+	
 	import flash.display.Shader;
 	import flash.display.ShaderJob;
 	import flash.geom.Point;
@@ -56,14 +57,14 @@ package away3d.core.raycast.colliders
 //        var time:uint = getTimer();
 
 			// send vertices to pb
-			var vertices:Vector.<Number> = subMesh.vertexData.concat(); // TODO: need concat? if not could affect rendering by introducing null triangles, or uncontrolled index buffer growth
+			var vertices:Vector.<Number> = subMesh.subGeometry.positionsProxy.data.concat(); // TODO: need concat? if not could affect rendering by introducing null triangles, or uncontrolled index buffer growth
 			var vertexBufferDims:Point = evaluateArrayAsGrid( vertices );
 			_rayTriangleKernel.data.vertexBuffer.width = vertexBufferDims.x;
 			_rayTriangleKernel.data.vertexBuffer.height = vertexBufferDims.y;
 			_rayTriangleKernel.data.vertexBufferWidth.value = [ vertexBufferDims.x ];
 			_rayTriangleKernel.data.vertexBuffer.input = vertices;
 			// send indices to pb
-			var indices:Vector.<Number> = Vector.<Number>( subMesh.indexData );
+			var indices:Vector.<Number> = Vector.<Number>( subMesh.getIndexBufferProxy().indices );
 			_indexBufferDims = evaluateArrayAsGrid( indices );
 			_rayTriangleKernel.data.indexBuffer.width = _indexBufferDims.x;
 			_rayTriangleKernel.data.indexBuffer.height = _indexBufferDims.y;
@@ -130,8 +131,8 @@ package away3d.core.raycast.colliders
 
 		public function get collisionNormal():Vector3D {
 			if( !_collisionExists ) return null;
-			var indices:Vector.<uint> = _collidingRenderable.indexData;
-			var vertices:Vector.<Number> = _collidingRenderable.vertexData;
+			var indices:Vector.<uint> = _collidingRenderable.getIndexBufferProxy().indices;
+			var vertices:Vector.<Number> = _collidingRenderable.getVertexBufferSelector(VertexBufferUsages.POSITIONS).bufferData;
 			var index:uint = _collisionTriangleIndex;
 			var i0:uint = indices[ index ] * 3;
 			var i1:uint = indices[ index + 1 ] * 3;
@@ -148,8 +149,8 @@ package away3d.core.raycast.colliders
 
 		public function get collisionUV():Point {
 			if( !_collisionExists ) return null;
-			var indices:Vector.<uint> = _collidingRenderable.indexData;
-			var uvs:Vector.<Number> = _collidingRenderable.UVData;
+			var indices:Vector.<uint> = _collidingRenderable.getIndexBufferProxy().indices;
+			var uvs:Vector.<Number> = _collidingRenderable.getVertexBufferSelector(VertexBufferUsages.UV).bufferData;
 			var index:uint = _collisionTriangleIndex;
 			var v:Number = _kernelOutputBuffer[ index + 1 ]; // barycentric coord 1
 			var w:Number = _kernelOutputBuffer[ index + 2 ]; // barycentric coord 2

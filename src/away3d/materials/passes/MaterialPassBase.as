@@ -4,6 +4,7 @@ package away3d.materials.passes
 	import away3d.arcane;
 	import away3d.cameras.Camera3D;
 	import away3d.core.base.IRenderable;
+	import away3d.core.base.buffers.VertexBufferUsages;
 	import away3d.core.managers.AGALProgram3DCache;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.debug.Debug;
@@ -207,9 +208,9 @@ package away3d.materials.passes
 			if (renderable.animationState)
 				renderable.animationState.setRenderState(stage3DProxy, renderable, _numUsedVertexConstants, _numUsedStreams);
 
-			stage3DProxy.setSimpleVertexBuffer(0, renderable.getVertexBuffer(stage3DProxy), Context3DVertexBufferFormat.FLOAT_3, renderable.vertexBufferOffset);
+			stage3DProxy.setVertexBufferSelector(0, renderable.getVertexBufferSelector(VertexBufferUsages.POSITIONS));
 
-			context.drawTriangles(renderable.getIndexBuffer(stage3DProxy), 0, renderable.numTriangles);
+			context.drawTriangles(renderable.getIndexBufferProxy().getBuffer(stage3DProxy), 0, renderable.numTriangles);
 		}
 
 		arcane function getVertexCode() : String

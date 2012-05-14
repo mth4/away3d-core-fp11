@@ -3,10 +3,11 @@ package away3d.materials.passes
 	import away3d.arcane;
 	import away3d.cameras.Camera3D;
 	import away3d.core.base.IRenderable;
+	import away3d.core.base.buffers.VertexBufferUsages;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.lights.LightBase;
 	import away3d.materials.lightpickers.LightPickerBase;
-
+	
 	import flash.display3D.Context3D;
 	import flash.display3D.Context3DProgramType;
 	import flash.display3D.Context3DTextureFormat;
@@ -197,9 +198,9 @@ package away3d.materials.passes
 
 				context.setProgramConstantsFromMatrix(Context3DProgramType.VERTEX, 0, matrix, true);
 				context.setProgramConstantsFromVector(Context3DProgramType.FRAGMENT, 0, _enc, 2);
-				stage3DProxy.setSimpleVertexBuffer(0, renderable.getVertexBuffer(stage3DProxy), Context3DVertexBufferFormat.FLOAT_3, renderable.vertexBufferOffset);
-				stage3DProxy.setSimpleVertexBuffer(1, renderable.getVertexNormalBuffer(stage3DProxy), Context3DVertexBufferFormat.FLOAT_3, renderable.normalBufferOffset);
-				context.drawTriangles(renderable.getIndexBuffer(stage3DProxy), 0, renderable.numTriangles);
+				stage3DProxy.setVertexBufferSelector(0, renderable.getVertexBufferSelector(VertexBufferUsages.POSITIONS));
+				stage3DProxy.setVertexBufferSelector(1, renderable.getVertexBufferSelector(VertexBufferUsages.NORMALS));
+				context.drawTriangles(renderable.getIndexBufferProxy().getBuffer(stage3DProxy), 0, renderable.numTriangles);
 			}
 		}
 

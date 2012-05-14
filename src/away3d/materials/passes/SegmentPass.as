@@ -117,7 +117,7 @@
 			// TODO: not used
 			lightPicker = lightPicker;
 			var context : Context3D = stage3DProxy._context3D;
-			var vertexBuffer : VertexBuffer3D = renderable.getVertexBuffer(stage3DProxy);
+			var vertexBuffer : VertexBuffer3D = renderable.getVertexBufferSelector("segmentData").bufferProxy.getBuffer(stage3DProxy);
 			context.setVertexBufferAt(0, vertexBuffer, 0, Context3DVertexBufferFormat.FLOAT_3);
 			context.setVertexBufferAt(1, vertexBuffer, 3, Context3DVertexBufferFormat.FLOAT_3);
 			context.setVertexBufferAt(2, vertexBuffer, 6, Context3DVertexBufferFormat.FLOAT_1);
@@ -127,7 +127,7 @@
 			_calcMatrix.append(camera.inverseSceneTransform);
 			context.setProgramConstantsFromMatrix(Context3DProgramType.VERTEX, 8, _calcMatrix, true);
 
-			context.drawTriangles(renderable.getIndexBuffer(stage3DProxy), 0, renderable.numTriangles);
+			context.drawTriangles(renderable.getIndexBufferProxy().getBuffer(stage3DProxy), 0, renderable.numTriangles);
 
 		}
 

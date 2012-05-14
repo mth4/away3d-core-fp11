@@ -10,11 +10,14 @@ package away3d.entities
 	import away3d.cameras.Camera3D;
 	import away3d.core.base.IRenderable;
 	import away3d.core.base.SubGeometry;
+	import away3d.core.base.buffers.IndexBufferProxy;
+	import away3d.core.base.buffers.VertexBufferProxy;
+	import away3d.core.base.buffers.VertexBufferSelector;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.core.partition.EntityNode;
 	import away3d.core.partition.RenderableNode;
 	import away3d.materials.MaterialBase;
-
+	
 	import flash.display3D.IndexBuffer3D;
 	import flash.display3D.VertexBuffer3D;
 	import flash.geom.Matrix;
@@ -93,24 +96,12 @@ package away3d.entities
 			_mouseHitMethod = value;
 		}
 
-		public function getVertexBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			return _geometry.getVertexBuffer( stage3DProxy );
+		public function getVertexBufferSelector(usage:String, index:uint=0):VertexBufferSelector {
+			return _geometry.getVertexBufferSelector(usage, index);
 		}
 
-		public function getUVBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			return _geometry.getUVBuffer( stage3DProxy );
-		}
-
-		public function getVertexNormalBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			return _geometry.getVertexNormalBuffer( stage3DProxy );
-		}
-
-		public function getVertexTangentBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			return _geometry.getVertexTangentBuffer( stage3DProxy );
-		}
-
-		public function getIndexBuffer( stage3DProxy:Stage3DProxy ):IndexBuffer3D {
-			return _geometry.getIndexBuffer( stage3DProxy );
+		public function getIndexBufferProxy():IndexBufferProxy {
+			return _geometry.indexBufferProxy;
 		}
 
 		override public function pushModelViewProjection( camera:Camera3D ):void {
@@ -188,15 +179,6 @@ package away3d.entities
 			return null;
 		}
 
-		public function getSecondaryUVBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			return _geometry.getSecondaryUVBuffer(stage3DProxy);
-		}
-
-		public function getCustomBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
-		{
-			return _geometry.getCustomBuffer(stage3DProxy);
-		}
-
 		public function get vertexBufferOffset() : int
 		{
 			return _geometry.vertexBufferOffset;
@@ -220,18 +202,6 @@ package away3d.entities
 		public function get secondaryUVBufferOffset() : int
 		{
 			return _geometry.secondaryUVBufferOffset;
-		}
-
-		public function get vertexData():Vector.<Number> {
-			return _geometry.vertexData;
-		}
-
-		public function get indexData():Vector.<uint> {
-			return _geometry.indexData;
-		}
-
-		public function get UVData():Vector.<Number> {
-			return _geometry.UVData;
 		}
 	}
 }

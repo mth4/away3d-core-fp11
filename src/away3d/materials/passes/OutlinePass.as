@@ -5,10 +5,11 @@ package away3d.materials.passes
 	import away3d.core.base.IRenderable;
 	import away3d.core.base.SubGeometry;
 	import away3d.core.base.SubMesh;
+	import away3d.core.base.buffers.VertexBufferUsages;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.entities.Mesh;
 	import away3d.materials.lightpickers.LightPickerBase;
-
+	
 	import flash.display3D.Context3D;
 	import flash.display3D.Context3DCompareMode;
 	import flash.display3D.Context3DProgramType;
@@ -178,12 +179,12 @@ package away3d.materials.passes
 
 				var context : Context3D = stage3DProxy._context3D;
 				context.setProgramConstantsFromMatrix(Context3DProgramType.VERTEX, 0, renderable.modelViewProjection, true);
-				stage3DProxy.setSimpleVertexBuffer(0, dedicatedRenderable.getVertexBuffer(stage3DProxy), Context3DVertexBufferFormat.FLOAT_3, dedicatedRenderable.vertexBufferOffset);
-				stage3DProxy.setSimpleVertexBuffer(1, dedicatedRenderable.getVertexNormalBuffer(stage3DProxy), Context3DVertexBufferFormat.FLOAT_3, dedicatedRenderable.normalBufferOffset);
-				context.drawTriangles(dedicatedRenderable.getIndexBuffer(stage3DProxy), 0, dedicatedRenderable.numTriangles);
+				stage3DProxy.setVertexBufferSelector(0, dedicatedRenderable.getVertexBufferSelector(VertexBufferUsages.POSITIONS));
+				stage3DProxy.setVertexBufferSelector(1, dedicatedRenderable.getVertexBufferSelector(VertexBufferUsages.NORMALS));
+				context.drawTriangles(dedicatedRenderable.getIndexBufferProxy().getBuffer(stage3DProxy), 0, dedicatedRenderable.numTriangles);
 			}
 			else {
-				stage3DProxy.setSimpleVertexBuffer(1, renderable.getVertexNormalBuffer(stage3DProxy), Context3DVertexBufferFormat.FLOAT_3, renderable.normalBufferOffset);
+				stage3DProxy.setVertexBufferSelector(1, renderable.getVertexBufferSelector(VertexBufferUsages.NORMALS));
 
 				super.render(renderable, stage3DProxy, camera, lightPicker);
 			}

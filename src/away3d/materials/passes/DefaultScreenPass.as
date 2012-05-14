@@ -3,6 +3,7 @@ package away3d.materials.passes
 	import away3d.arcane;
 	import away3d.cameras.Camera3D;
 	import away3d.core.base.IRenderable;
+	import away3d.core.base.buffers.VertexBufferUsages;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.lights.DirectionalLight;
 	import away3d.lights.LightProbe;
@@ -509,10 +510,10 @@ package away3d.materials.passes
 		arcane override function render(renderable : IRenderable, stage3DProxy : Stage3DProxy, camera : Camera3D, lightPicker : LightPickerBase) : void
 		{
 			var context : Context3D = stage3DProxy._context3D;
-			if (_uvBufferIndex >= 0) stage3DProxy.setSimpleVertexBuffer(_uvBufferIndex, renderable.getUVBuffer(stage3DProxy), Context3DVertexBufferFormat.FLOAT_2, renderable.UVBufferOffset);
-			if (_secondaryUVBufferIndex >= 0) stage3DProxy.setSimpleVertexBuffer(_secondaryUVBufferIndex, renderable.getSecondaryUVBuffer(stage3DProxy), Context3DVertexBufferFormat.FLOAT_2, renderable.secondaryUVBufferOffset);
-			if (_normalBufferIndex >= 0) stage3DProxy.setSimpleVertexBuffer(_normalBufferIndex, renderable.getVertexNormalBuffer(stage3DProxy), Context3DVertexBufferFormat.FLOAT_3, renderable.normalBufferOffset);
-			if (_tangentBufferIndex >= 0) stage3DProxy.setSimpleVertexBuffer(_tangentBufferIndex, renderable.getVertexTangentBuffer(stage3DProxy), Context3DVertexBufferFormat.FLOAT_3, renderable.tangentBufferOffset);
+			if (_uvBufferIndex >= 0) stage3DProxy.setVertexBufferSelector(_uvBufferIndex, renderable.getVertexBufferSelector(VertexBufferUsages.UV));
+			if (_secondaryUVBufferIndex >= 0) stage3DProxy.setVertexBufferSelector(_secondaryUVBufferIndex, renderable.getVertexBufferSelector(VertexBufferUsages.UV, 1));
+			if (_normalBufferIndex >= 0) stage3DProxy.setVertexBufferSelector(_normalBufferIndex, renderable.getVertexBufferSelector(VertexBufferUsages.NORMALS));
+			if (_tangentBufferIndex >= 0) stage3DProxy.setVertexBufferSelector(_tangentBufferIndex, renderable.getVertexBufferSelector(VertexBufferUsages.TANGENTS));
 			if (_sceneMatrixIndex >= 0) context.setProgramConstantsFromMatrix(Context3DProgramType.VERTEX, _sceneMatrixIndex, renderable.sceneTransform, true);
 			if (_sceneNormalMatrixIndex >= 0) context.setProgramConstantsFromMatrix(Context3DProgramType.VERTEX, _sceneNormalMatrixIndex, renderable.inverseSceneTransform);
 

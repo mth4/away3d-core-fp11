@@ -8,15 +8,19 @@
 	import away3d.bounds.BoundingSphere;
 	import away3d.bounds.BoundingVolumeBase;
 	import away3d.core.base.IRenderable;
+	import away3d.core.base.buffers.IndexBufferProxy;
+	import away3d.core.base.buffers.VertexBufferProxy;
+	import away3d.core.base.buffers.VertexBufferSelector;
+	import away3d.core.base.buffers.VertexBufferUsages;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.core.partition.EntityNode;
 	import away3d.core.partition.RenderableNode;
+	import away3d.core.raycast.MouseHitMethod;
 	import away3d.materials.MaterialBase;
 	import away3d.materials.SegmentMaterial;
 	import away3d.primitives.LineSegment;
 	import away3d.primitives.data.Segment;
-	import away3d.core.raycast.MouseHitMethod;
-
+	
 	import flash.display3D.IndexBuffer3D;
 	import flash.display3D.VertexBuffer3D;
 	import flash.geom.Matrix;
@@ -36,10 +40,8 @@
 		private var _numVertices:uint;
 		private var _indices:Vector.<uint>;
 		private var _numIndices:uint;
-		private var _vertexBufferDirty:Boolean;
-		private var _indexBufferDirty:Boolean;
-		private var _vertexBuffer:VertexBuffer3D;
-		private var _indexBuffer:IndexBuffer3D;
+		private var _vertexBuffer:VertexBufferProxy;
+		private var _indexBuffer:IndexBufferProxy;
 		private var _lineCount:uint;
 
 		public function SegmentSet() {
@@ -50,6 +52,9 @@
 			_segments = new Vector.<Segment>();
 			_numVertices = 0;
 			_indices = new Vector.<uint>();
+			
+			_vertexBuffer = new VertexBufferProxy("segmentData", _vertices, 11);
+			_indexBuffer = new IndexBufferProxy(_indices);
 
 			material = new SegmentMaterial();
 		}
@@ -64,11 +69,12 @@
 			var index:uint = _lineCount << 2;
 
 			_indices.push( index, index + 1, index + 2, index + 3, index + 2, index + 1 );
+			
+			_indexBuffer.invalidateSize();
+			_vertexBuffer.invalidateSize();
 
 			_numVertices = _vertices.length / 11;
 			_numIndices = _indices.length;
-			_vertexBufferDirty = true;
-			_indexBufferDirty = true;
 			_lineCount++;
 		}
 
@@ -131,8 +137,9 @@
 			_vertices[index++] = endG;
 			_vertices[index++] = endB;
 			_vertices[index++] = 1;
-
-			_vertexBufferDirty = true;
+			
+			var vertexIndex:int = segment.index / 11;
+			_vertexBuffer.invalidateContentRange(vertexIndex, vertexIndex+1);
 		}
 
 
@@ -143,8 +150,9 @@
 
 			_numVertices = _vertices.length / 11;
 			_numIndices = _indices.length;
-			_vertexBufferDirty = true;
-			_indexBufferDirty = true;
+			
+			_indexBuffer.invalidateSize();
+			_vertexBuffer.invalidateSize();
 		}
 
 		public function removeSegment( segment:Segment ):void {
@@ -160,8 +168,9 @@
 					index += 6;
 				}
 			}
-			_vertexBufferDirty = true;
-			_indexBufferDirty = true;
+			
+			_indexBuffer.invalidateSize();
+			_vertexBuffer.invalidateSize();
 		}
 
 		public function getSegment( index:uint ):Segment {
@@ -175,48 +184,32 @@
 			_numVertices = 0;
 			_numIndices = 0;
 			_lineCount = 0;
-			_vertexBufferDirty = true;
-			_indexBufferDirty = true;
+			
+			_indexBuffer.invalidateSize();
+			_vertexBuffer.invalidateSize();
 		}
 
-		public function getIndexBuffer( stage3DProxy:Stage3DProxy ):IndexBuffer3D {
-			if( _indexBufferDirty ) {
-				_indexBuffer = stage3DProxy._context3D.createIndexBuffer( _numIndices );
-				_indexBuffer.uploadFromVector( _indices, 0, _numIndices );
-				_indexBufferDirty = false;
-			}
+		public function getIndexBufferProxy():IndexBufferProxy {
 			return _indexBuffer;
 		}
 
-		public function getVertexBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			if( _numVertices == 0 ) {
-				addSegment( new LineSegment( new Vector3D(), new Vector3D() ) ); // buffers cannot be empty
+		public function getVertexBufferSelector(usage:String, index:uint=0):VertexBufferSelector {
+			if(usage == "segmentData")
+			{
+				if( _numVertices == 0 ) {
+					addSegment( new LineSegment( new Vector3D(), new Vector3D() ) ); // buffers cannot be empty
+				}
+				
+				return _vertexBuffer.selectors[0];
 			}
-
-			if( _vertexBufferDirty ) {
-				_vertexBuffer = stage3DProxy._context3D.createVertexBuffer( _numVertices, 11 );
-				_vertexBuffer.uploadFromVector( _vertices, 0, _numVertices );
-				_vertexBufferDirty = false;
-			}
-			return _vertexBuffer;
+			else
+				return null;
 		}
 
 		override public function dispose():void {
 			super.dispose();
 			if( _vertexBuffer ) _vertexBuffer.dispose();
 			if( _indexBuffer ) _indexBuffer.dispose();
-		}
-
-		public function getUVBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			return null;
-		}
-
-		public function getVertexNormalBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			return null;
-		}
-
-		public function getVertexTangentBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			return null;
 		}
 
 		override public function get mouseEnabled():Boolean {
@@ -274,52 +267,6 @@
 
 		public function get uvTransform():Matrix {
 			return null;
-		}
-
-		public function getSecondaryUVBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			return null;
-		}
-
-		public function get vertexData():Vector.<Number> {
-			return _vertices;
-		}
-
-		public function get indexData():Vector.<uint> {
-			return _indices;
-		}
-
-		public function get UVData():Vector.<Number> {
-			return null;
-		}
-
-		public function getCustomBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
-		{
-			return null;
-		}
-
-		public function get vertexBufferOffset() : int
-		{
-			return 0;
-		}
-
-		public function get normalBufferOffset() : int
-		{
-			return 0;
-		}
-
-		public function get tangentBufferOffset() : int
-		{
-			return 0;
-		}
-
-		public function get UVBufferOffset() : int
-		{
-			return 0;
-		}
-
-		public function get secondaryUVBufferOffset() : int
-		{
-			return 0;
 		}
 	}
 }

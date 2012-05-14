@@ -2,12 +2,19 @@
 {
 	import away3d.animators.data.AnimationBase;
 	import away3d.arcane;
+	import away3d.core.base.buffers.IndexBufferProxy;
+	import away3d.core.base.buffers.VertexBufferProxy;
+	import away3d.core.base.buffers.VertexBufferSelector;
+	import away3d.core.base.buffers.VertexBufferUsages;
+	import away3d.core.base.data.Vertex;
 	import away3d.core.managers.Stage3DProxy;
-
+	
 	import flash.display3D.IndexBuffer3D;
 	import flash.display3D.VertexBuffer3D;
+	import flash.events.Event;
 	import flash.geom.Matrix3D;
 	import flash.geom.Vector3D;
+	import flash.utils.Dictionary;
 
 	use namespace arcane;
 
@@ -23,61 +30,44 @@
 	public class SubGeometry
 	{
 		private var _parentGeometry : Geometry;
-
+		
 		// raw data:
-		protected var _customData : Vector.<Number>;
-		protected var _vertices : Vector.<Number>;
-		protected var _uvs : Vector.<Number>;
-		protected var _secondaryUvs : Vector.<Number>;
-		protected var _vertexNormals : Vector.<Number>;
-		protected var _vertexTangents : Vector.<Number>;
-		protected var _indices : Vector.<uint>;
 		protected var _faceNormalsData : Vector.<Number>;
 		protected var _faceWeights : Vector.<Number>;
 		protected var _faceTangents : Vector.<Number>;
-
+		
 		// buffers:
-		protected var _vertexBuffer : Vector.<VertexBuffer3D> = new Vector.<VertexBuffer3D>(8);
-		protected var _uvBuffer : Vector.<VertexBuffer3D> = new Vector.<VertexBuffer3D>(8);
-		protected var _secondaryUvBuffer : Vector.<VertexBuffer3D> = new Vector.<VertexBuffer3D>(8);
-		protected var _vertexNormalBuffer : Vector.<VertexBuffer3D> = new Vector.<VertexBuffer3D>(8);
-		protected var _vertexTangentBuffer : Vector.<VertexBuffer3D> = new Vector.<VertexBuffer3D>(8);
-		protected var _customBuffer : Vector.<VertexBuffer3D>;
-		protected var _indexBuffer : Vector.<IndexBuffer3D> = new Vector.<IndexBuffer3D>(8);
-
-		private var _autoDeriveVertexNormals : Boolean = true;
-		private var _autoDeriveVertexTangents : Boolean = true;
+		protected var _selectors:Vector.<VertexBufferSelector> = new Vector.<VertexBufferSelector>();
+		
+		protected var _positionsBuffer:VertexBufferProxy;
+		protected var _normalsBuffer:VertexBufferProxy;
+		protected var _tangentsBuffer:VertexBufferProxy;
+		protected var _mainUVBuffer:VertexBufferProxy;
+		protected var _indexBuffer:IndexBufferProxy;
+		
+		protected var _autoDeriveVertexNormals : Boolean = true;
+		protected var _autoDeriveVertexTangents : Boolean = true;
 		private var _useFaceWeights : Boolean = false;
-
+		
 		// raw data dirty flags:
 		protected var _faceNormalsDirty : Boolean = true;
 		protected var _faceTangentsDirty : Boolean = true;
 		protected var _vertexNormalsDirty : Boolean = true;
 		protected var _vertexTangentsDirty : Boolean = true;
-
-		// buffer dirty flags, per context:
-		protected var _vertexBufferDirty : Vector.<Boolean> = new Vector.<Boolean>(8);
-		protected var _uvBufferDirty : Vector.<Boolean> = new Vector.<Boolean>(8);
-		protected var _secondaryUvBufferDirty : Vector.<Boolean> = new Vector.<Boolean>(8);
-		protected var _indexBufferDirty : Vector.<Boolean> = new Vector.<Boolean>(8);
-		protected var _vertexNormalBufferDirty : Vector.<Boolean> = new Vector.<Boolean>(8);
-		protected var _vertexTangentBufferDirty : Vector.<Boolean> = new Vector.<Boolean>(8);
-		protected var _customBufferDirty : Vector.<Boolean>;
-
-		protected var _numVertices : uint;
-		protected var _numIndices : uint;
-		protected var _numTriangles : uint;
-		private var _uvScaleV : Number = 1;
-		private var _customElementsPerVertex : int;
-
-
-		/**
-		 * Creates a new SubGeometry object.
-		 */
+		
+		// already generated normal and tangent buffers (usage of weak keys ensures that it will not use any extra memory)
+		static private var _vertexNormalsMapping:StructuredMapping;	// position buffer -> index buffer -> useFaceWeights -> BUFFER
+		static private var _vertexTangentsMapping:StructuredMapping;	// position buffer -> index buffer -> main uv buffer -> BUFFER
+		
+		/*
+		* PUBLIC
+		*/
 		public function SubGeometry()
 		{
+			if(_vertexNormalsMapping == null) _vertexNormalsMapping = new StructuredMapping();
+			if(_vertexTangentsMapping == null) _vertexTangentsMapping = new StructuredMapping();
 		}
-
+		
 		/**
 		 * The animation that affects the geometry.
 		 */
@@ -85,23 +75,23 @@
 		{
 			return _parentGeometry._animation;
 		}
-
+		
 		/**
 		 * The total amount of vertices in the SubGeometry.
 		 */
 		public function get numVertices() : uint
 		{
-			return _numVertices;
+			return _positionsBuffer != null ? _positionsBuffer.numVertices : 0;
 		}
-
+		
 		/**
 		 * The total amount of triangles in the SubGeometry.
 		 */
 		public function get numTriangles() : uint
 		{
-			return _numTriangles;
+			return _indexBuffer != null ? _indexBuffer.numTriangles : 0;
 		}
-
+		
 		/**
 		 * True if the vertex normals should be derived from the geometry, false if the vertex normals are set
 		 * explicitly.
@@ -110,30 +100,14 @@
 		{
 			return _autoDeriveVertexNormals;
 		}
-
+		
 		public function set autoDeriveVertexNormals(value : Boolean) : void
 		{
 			_autoDeriveVertexNormals = value;
-
+			
 			_vertexNormalsDirty = value;
 		}
-
-		/**
-		 * Indicates whether or not to take the size of faces into account when auto-deriving vertex normals and tangents.
-		 */
-		public function get useFaceWeights() : Boolean
-		{
-			return _useFaceWeights;
-		}
-
-		public function set useFaceWeights(value : Boolean) : void
-		{
-			_useFaceWeights = value;
-			if (_autoDeriveVertexNormals) _vertexNormalsDirty = true;
-			if (_autoDeriveVertexTangents) _vertexTangentsDirty = true;
-			_faceNormalsDirty = true;
-		}
-
+		
 		/**
 		 * True if the vertex tangents should be derived from the geometry, false if the vertex normals are set
 		 * explicitly.
@@ -142,412 +116,427 @@
 		{
 			return _autoDeriveVertexTangents;
 		}
-
+		
 		public function set autoDeriveVertexTangents(value : Boolean) : void
 		{
 			_autoDeriveVertexTangents = value;
-
+			
 			_vertexTangentsDirty = value;
 		}
-
-		public function initCustomBuffer(numVertices : int, elementsPerVertex : int) : void
-		{
-			_numVertices = numVertices;
-			_customElementsPerVertex = elementsPerVertex;
-			_customBuffer = new Vector.<VertexBuffer3D>(8);
-			_customBufferDirty = new Vector.<Boolean>(8);
-		}
-
+		
 		/**
-		 * A buffer allowing you any sort of data. Needs to be initialized by calling initCustomBuffer
-		 * @param stage3DProxy
-		 * @return
+		 * Indicates whether or not to take the size of faces into account when auto-deriving vertex normals and tangents.
 		 */
-		public function getCustomBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
+		public function get useFaceWeights() : Boolean
 		{
-			var contextIndex : int = stage3DProxy._stage3DIndex;
-
-			if (_customBufferDirty[contextIndex] || !_customBuffer[contextIndex]) {
-				VertexBuffer3D(_customBuffer[contextIndex] ||= stage3DProxy._context3D.createVertexBuffer(_numVertices, _customElementsPerVertex)).uploadFromVector(_customData, 0, _numVertices);
-				_customBufferDirty[contextIndex] = false;
-			}
-
-			return _customBuffer[contextIndex];
+			return _useFaceWeights;
 		}
-
+		
+		public function set useFaceWeights(value : Boolean) : void
+		{
+			_useFaceWeights = value;
+			if (_autoDeriveVertexNormals) _vertexNormalsDirty = true;
+			if (_autoDeriveVertexTangents) _vertexTangentsDirty = true;
+			_faceNormalsDirty = true;
+		}
+		
+		/**
+		 * Adds vertex buffer selector to this SubGeometry instance.
+		 */
+		public function addVertexBufferSelector(selector:VertexBufferSelector):void
+		{
+			var buffer:VertexBufferProxy = selector.bufferProxy;
+			
+			switch(selector.usage)
+			{
+				case VertexBufferUsages.POSITIONS:
+					if(buffer.selectors.length != 1)
+						throw new Error("Multiple selectors for position buffer is currently not allowed");
+					
+					if(_positionsBuffer == null)
+					{
+						_positionsBuffer = buffer;
+						_positionsBuffer.addEventListener(Event.CHANGE, onPositionsBufferChange);
+					}
+					break;
+				
+				case VertexBufferUsages.NORMALS:
+					if(buffer.selectors.length != 1)
+						throw new Error("Multiple selectors for normal buffer is currently not allowed");
+					
+					_normalsBuffer = buffer;
+					break;
+				
+				case VertexBufferUsages.TANGENTS:
+					if(buffer.selectors.length != 1)
+						throw new Error("Multiple selectors for tangents buffer is currently not allowed");
+					
+					_tangentsBuffer = buffer;
+					break;
+				
+				case VertexBufferUsages.UV:
+					if(_mainUVBuffer == null)
+					{
+						if(buffer.selectors.length == 1)		// it is ok for UV's in general, but this class doesn't support it for main UVs to maintain backward compatibility
+						{
+							_mainUVBuffer = buffer;
+							_mainUVBuffer.addEventListener(Event.CHANGE, onUVBufferChange);
+						}
+					}
+					break;
+			}
+			
+			buffer.addOwner(this);		// may add ownership multiple times (for each selector) for one buffer
+			_selectors.push(selector);
+		}
+		
+		public function removeVertexBufferSelector(selector:VertexBufferSelector):void
+		{
+			var buffer:VertexBufferProxy = selector.bufferProxy;
+			var numSelectors:uint = _selectors.length;
+			
+			for(var i:uint=0; i<numSelectors; ++i)
+				if(_selectors[i] == selector)
+				{
+					_selectors.splice(i, 1);
+					
+					if(_positionsBuffer == buffer)
+					{
+						_positionsBuffer.removeEventListener(Event.CHANGE, onPositionsBufferChange);
+						_positionsBuffer = null;
+					}
+					
+					if(_mainUVBuffer == buffer)
+					{
+						_mainUVBuffer.removeEventListener(Event.CHANGE, onUVBufferChange);
+						_mainUVBuffer = null;
+					}
+					
+					if(_normalsBuffer == buffer) _normalsBuffer = null;
+					if(_tangentsBuffer == buffer) _tangentsBuffer = null;
+					
+					buffer.removeOwner(this);
+					
+					return;
+				}
+		}
+		
+		/**
+		 * Adds all of buffer's selectors to this SubGeometry instance.
+		 */
+		public function addVertexBuffer(buffer:VertexBufferProxy):void
+		{
+			for each(var selector:VertexBufferSelector in buffer.selectors)
+				addVertexBufferSelector(selector);
+		}
+		
+		/**
+		 * Removes all of buffer's selectors from this SubGeometry instance.
+		 */
+		public function removeVertexBuffer(buffer:VertexBufferProxy):void
+		{
+			for each(var selector:VertexBufferSelector in buffer.selectors)
+				removeVertexBufferSelector(selector);
+		}
+		
+		public function get positionsProxy():VertexBufferProxy
+		{
+			return _positionsBuffer;
+		}
+		
+		public function get mainUVProxy():VertexBufferProxy
+		{
+			return _mainUVBuffer;
+		}
+		
+		public function get normalsProxy():VertexBufferProxy
+		{
+			if(_autoDeriveVertexNormals && _vertexNormalsDirty)
+				updateVertexNormals();
+			
+			return _normalsBuffer;
+		}
+		
+		public function get tangentsProxy():VertexBufferProxy
+		{
+			if(_vertexTangentsDirty)
+				updateVertexTangents();
+			
+			return _tangentsBuffer;
+		}
+		
+		public function get indexBufferProxy():IndexBufferProxy
+		{
+			return _indexBuffer;
+		}
+		
+		public function set indexBufferProxy(buffer:IndexBufferProxy):void
+		{
+			if(_indexBuffer == buffer)
+				return;
+			
+			if(_indexBuffer != null)
+				_indexBuffer.removeEventListener(Event.CHANGE, onIndexBufferChange);
+			
+			_indexBuffer = buffer;
+			_indexBuffer.addOwner(this);
+			_indexBuffer.addEventListener(Event.CHANGE, onIndexBufferChange);
+			
+			onIndexBufferChange(null);
+		}
+		
+		/**
+		 * Retrieves vertex buffer selector with given usage.
+		 * @param usage One of VertexBufferUsages class constants or some custom usage.
+		 * @param index Index of selector, if multiple selectors with this usage are expected.
+		 * @todo It will be faster to store selectors in dictionary where usages would be keys and values would be vectors with selectors.
+		 */
+		public function getVertexBufferSelector(usage:String, index:uint=0):VertexBufferSelector
+		{
+			for each(var selector:VertexBufferSelector in _selectors)
+				if(selector.usage == usage)
+				{
+					if(index == 0)
+						return selector;
+					index--;
+				}
+			
+			return null;
+		}
+		
+		/**
+		 * Retrieves uv buffer selector at specified index.
+		 */
+		public function getUVBufferSelector(index:uint):VertexBufferSelector
+		{
+			return getVertexBufferSelector(VertexBufferUsages.UV, index);
+		}
+		
 		/**
 		 * Retrieves the VertexBuffer3D object that contains vertex positions.
 		 * @param context The Context3D for which we request the buffer
 		 * @return The VertexBuffer3D object that contains vertex positions.
 		 */
-		public function getVertexBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
+		[Deprecated(replacement="getVertexBufferSelector(...) or positionsBufferProxy.getBuffer(...)")]
+		public function getVertexBuffer(stage3DProxy:Stage3DProxy):VertexBuffer3D
 		{
-			var contextIndex : int = stage3DProxy._stage3DIndex;
-
-			if (_vertexBufferDirty[contextIndex] || !_vertexBuffer[contextIndex]) {
-				VertexBuffer3D(_vertexBuffer[contextIndex] ||= stage3DProxy._context3D.createVertexBuffer(_numVertices, 3)).uploadFromVector(_vertices, 0, _numVertices);
-				_vertexBufferDirty[contextIndex] = false;
-			}
-
-			return _vertexBuffer[contextIndex];
+			return _positionsBuffer.getBuffer(stage3DProxy);
 		}
-
+		
 		/**
 		 * Retrieves the VertexBuffer3D object that contains texture coordinates.
 		 * @param context The Context3D for which we request the buffer
 		 * @return The VertexBuffer3D object that contains texture coordinates.
 		 */
-		public function getUVBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
+		[Deprecated(replacement="getVertexBufferSelector(...) or mainUVBufferProxy.getBuffer(...)")]
+		public function getUVBuffer(stage3DProxy:Stage3DProxy):VertexBuffer3D
 		{
-			var contextIndex : int = stage3DProxy._stage3DIndex;
-
-			if (_uvBufferDirty[contextIndex] || !_uvBuffer[contextIndex]) {
-				(_uvBuffer[contextIndex] ||= stage3DProxy._context3D.createVertexBuffer(_numVertices, 2)).uploadFromVector(_uvs, 0, _numVertices);
-				_uvBufferDirty[contextIndex] = false;
-			}
-
-			return _uvBuffer[contextIndex];
+			return _mainUVBuffer.getBuffer(stage3DProxy);
 		}
-
+		
 		public function applyTransformation(transform:Matrix3D):void
 		{
-			var len : uint = _vertices.length/3;
+			var positions:Vector.<Number> = _positionsBuffer.data;
+			var vertexNormals:Vector.<Number> = _normalsBuffer != null ? _normalsBuffer.data : null;
+			var vertexTangents:Vector.<Number> = _tangentsBuffer != null ? _tangentsBuffer.data : null;
+			
+			var len : uint = positions.length/3;
 			var i:uint, i0:uint, i1:uint, i2:uint;
 			var v3:Vector3D = new Vector3D();
-
-			var bakeNormals:Boolean = _vertexNormals != null;
-			var bakeTangents:Boolean = _vertexTangents != null;
-
+			
+			var bakeNormals:Boolean = vertexNormals != null;
+			var bakeTangents:Boolean = vertexTangents != null;
+			
 			for (i = 0; i < len; ++i) {
-
+				
 				i0 = 3 * i;
 				i1 = i0 + 1;
 				i2 = i0 + 2;
-
+				
 				// bake position
-				v3.x = _vertices[i0];
-				v3.y = _vertices[i1];
-				v3.z = _vertices[i2];
+				v3.x = positions[i0];
+				v3.y = positions[i1];
+				v3.z = positions[i2];
 				v3 = transform.transformVector(v3);
-				_vertices[i0] = v3.x;
-				_vertices[i1] = v3.y;
-				_vertices[i2] = v3.z;
-
+				positions[i0] = v3.x;
+				positions[i1] = v3.y;
+				positions[i2] = v3.z;
+				
 				// bake normal
 				if(bakeNormals)
 				{
-					v3.x = _vertexNormals[i0];
-					v3.y = _vertexNormals[i1];
-					v3.z = _vertexNormals[i2];
+					v3.x = vertexNormals[i0];
+					v3.y = vertexNormals[i1];
+					v3.z = vertexNormals[i2];
 					v3 = transform.deltaTransformVector(v3);
-					_vertexNormals[i0] = v3.x;
-					_vertexNormals[i1] = v3.y;
-					_vertexNormals[i2] = v3.z;
+					vertexNormals[i0] = v3.x;
+					vertexNormals[i1] = v3.y;
+					vertexNormals[i2] = v3.z;
 				}
-
+				
 				// bake tangent
 				if(bakeTangents)
 				{
-					v3.x = _vertexTangents[i0];
-					v3.y = _vertexTangents[i1];
-					v3.z = _vertexTangents[i2];
+					v3.x = vertexTangents[i0];
+					v3.y = vertexTangents[i1];
+					v3.z = vertexTangents[i2];
 					v3 = transform.deltaTransformVector(v3);
-					_vertexTangents[i0] = v3.x;
-					_vertexTangents[i1] = v3.y;
-					_vertexTangents[i2] = v3.z;
+					vertexTangents[i0] = v3.x;
+					vertexTangents[i1] = v3.y;
+					vertexTangents[i2] = v3.z;
 				}
 			}
+			
+			_positionsBuffer.invalidateContent();
+			if(_normalsBuffer != null) _normalsBuffer.invalidateContent();
+			if(_tangentsBuffer != null) _tangentsBuffer.invalidateContent();
 		}
-
+		
+		[Deprecated(replacement="getVertexBufferSelector(...)")]
 		public function getSecondaryUVBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
 		{
-			var contextIndex : int = stage3DProxy._stage3DIndex;
-
-			if (_secondaryUvBufferDirty[contextIndex] || !_secondaryUvBuffer[contextIndex]) {
-				(_secondaryUvBuffer[contextIndex] ||= stage3DProxy._context3D.createVertexBuffer(_numVertices, 2)).uploadFromVector(_secondaryUvs, 0, _numVertices);
-				_secondaryUvBufferDirty[contextIndex] = false;
-			}
-
-			return _secondaryUvBuffer[contextIndex];
+			return getVertexBufferSelector(VertexBufferUsages.UV, 1).bufferProxy.getBuffer(stage3DProxy);
 		}
-
+		
 		/**
 		 * Retrieves the VertexBuffer3D object that contains vertex normals.
 		 * @param context The Context3D for which we request the buffer
 		 * @return The VertexBuffer3D object that contains vertex normals.
 		 */
-		public function getVertexNormalBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
+		[Deprecated(replacement="getVertexBufferSelector(...) or normalsBufferProxy.getBuffer(...)")]
+		public function getVertexNormalBuffer(stage3DProxy:Stage3DProxy):VertexBuffer3D
 		{
-			var contextIndex : int = stage3DProxy._stage3DIndex;
-
-			if (_autoDeriveVertexNormals && _vertexNormalsDirty)
-				updateVertexNormals();
-
-			if (_vertexNormalBufferDirty[contextIndex] || !_vertexNormalBuffer[contextIndex]) {
-				(_vertexNormalBuffer[contextIndex] ||= stage3DProxy._context3D.createVertexBuffer(_numVertices, 3)).uploadFromVector(_vertexNormals, 0, _numVertices);
-				_vertexNormalBufferDirty[contextIndex] = false;
-			}
-
-			return _vertexNormalBuffer[contextIndex];
+			return normalsProxy.getBuffer(stage3DProxy);
 		}
-
+		
 		/**
 		 * Retrieves the VertexBuffer3D object that contains vertex tangents.
 		 * @param context The Context3D for which we request the buffer
 		 * @return The VertexBuffer3D object that contains vertex tangents.
 		 */
-		public function getVertexTangentBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
+		[Deprecated(replacement="getVertexBufferSelector(...) or tangentsBufferProxy.getBuffer(...)")]
+		public function getVertexTangentBuffer(stage3DProxy:Stage3DProxy):VertexBuffer3D
 		{
-			var contextIndex : int = stage3DProxy._stage3DIndex;
-
-			if (_vertexTangentsDirty)
-				updateVertexTangents();
-
-			if (_vertexTangentBufferDirty[contextIndex] || !_vertexTangentBuffer[contextIndex]) {
-				(_vertexTangentBuffer[contextIndex] ||= stage3DProxy._context3D.createVertexBuffer(_numVertices, 3)).uploadFromVector(_vertexTangents, 0, _numVertices);
-				_vertexTangentBufferDirty[contextIndex] = false;
-			}
-			return _vertexTangentBuffer[contextIndex];
+			return tangentsProxy.getBuffer(stage3DProxy);
 		}
-
+		
 		/**
 		 * Retrieves the VertexBuffer3D object that contains triangle indices.
 		 * @param context The Context3D for which we request the buffer
 		 * @return The VertexBuffer3D object that contains triangle indices.
 		 */
+		[Deprecated(replacement="indexBufferProxy")]
 		public function getIndexBuffer(stage3DProxy : Stage3DProxy) : IndexBuffer3D
 		{
-			var contextIndex : int = stage3DProxy._stage3DIndex;
-
-			if (_indexBufferDirty[contextIndex] || !_indexBuffer[contextIndex]) {
-				(_indexBuffer[contextIndex] ||= stage3DProxy._context3D.createIndexBuffer(_numIndices)).uploadFromVector(_indices, 0, _numIndices);
-				_indexBufferDirty[contextIndex] = false;
-			}
-
-			return _indexBuffer[contextIndex];
+			return _indexBuffer.getBuffer(stage3DProxy);
 		}
-
+		
 		/**
 		 * Clones the current object
 		 * @return An exact duplicate of the current object.
 		 */
-		public function clone() : SubGeometry
+		public function clone(cloneBuffers:Boolean=false) : SubGeometry
 		{
-			var clone : SubGeometry = new SubGeometry();
-			clone.updateVertexData(_vertices.concat());
-			clone.updateUVData(_uvs.concat());
-			clone.updateIndexData(_indices.concat());
-			if (_secondaryUvs) clone.updateSecondaryUVData(_secondaryUvs.concat());
-			if (!_autoDeriveVertexNormals) clone.updateVertexNormalData(_vertexNormals.concat());
-			if (!_autoDeriveVertexTangents) clone.updateVertexTangentData(_vertexTangents.concat());
-			return clone;
-		}
-
-		/**
-		 * Scales the geometry.
-		 * @param scale The amount by which to scale.
-		 */
-		public function scale(scale : Number):void
-		{
-			var len : uint = _vertices.length;
-			for (var i : uint = 0; i < len; ++i)
-				_vertices[i] *= scale;
-			invalidateBuffers(_vertexBufferDirty);
-		}
-
-		/**
-		 * Scales the uv coordinates
-		 * @param scaleU The amount by which to scale on the u axis. Default is 1;
-		 * @param scaleV The amount by which to scale on the v axis. Default is 1;
-		 */
-		private var _scaleU : Number = 1;
-		private var _scaleV : Number = 1;
-		
-		public function get scaleU():Number
-		{
-			return _scaleU;
-		}
-		
-		public function get scaleV():Number
-		{
-			return _scaleV;
-		}
-		 
-		public function scaleUV(scaleU : Number = 1, scaleV : Number = 1):void
-		{
-			for (var i : uint = 0; i < _uvs.length;++i) {
-				_uvs[i] /= _scaleU;
-				_uvs[i] *= scaleU;
-				i++;
-				_uvs[i] /= _scaleV;
-				_uvs[i] *= scaleV;
+			var selector:VertexBufferSelector;
+			
+			var clone:SubGeometry = new SubGeometry();
+			
+			if(!cloneBuffers)
+			{
+				for each(selector in _selectors)
+					clone.addVertexBufferSelector(selector);
+			}
+			else
+			{
+				var buffersClones:Dictionary = new Dictionary();
+				for each(selector in _selectors)			// clone buffers referenced by selectors
+					if(buffersClones[selector.bufferProxy] == null)
+						buffersClones[selector.bufferProxy.clone()];
+				
+				for each(selector in _selectors)			// find correct selectors in cloned buffers
+					for each(var selector2:VertexBufferSelector in selector.bufferProxy.selectors)
+						if(selector.usage == selector2.usage && selector.offset == selector2.offset)
+							clone.addVertexBufferSelector(selector2);
 			}
 			
-			_scaleU = scaleU;
-			_scaleV = scaleV;
-			 
-			invalidateBuffers(_uvBufferDirty);
+			clone._indexBuffer = cloneBuffers ? _indexBuffer.clone() : _indexBuffer;
+			
+			return clone;
 		}
-
+		
 		/**
 		 * Clears all resources used by the SubGeometry object.
 		 */
 		public function dispose() : void
 		{
-			disposeAllVertexBuffers();
-			disposeIndexBuffers(_indexBuffer);
-			_customBuffer = null;
-			_vertexBuffer = null;
-			_vertexNormalBuffer = null;
-			_uvBuffer = null;
-			_secondaryUvBuffer = null;
-			_vertexTangentBuffer = null;
+			for each(var selector:VertexBufferSelector in _selectors)
+				selector.bufferProxy.removeOwner(this);
+			
+			if(_indexBuffer != null)
+				_indexBuffer.removeOwner(this);
+			
+			_selectors = null;
+			
+			_positionsBuffer = null;
+			_normalsBuffer = null;
+			_tangentsBuffer = null;
+			_mainUVBuffer = null;
 			_indexBuffer = null;
-			_vertices = null;
-			_uvs = null;
-			_secondaryUvs = null;
-			_vertexNormals = null;
-			_vertexTangents = null;
-			_indices = null;
+			
 			_faceNormalsData = null;
 			_faceWeights = null;
 			_faceTangents = null;
-			_customData = null;
-			_vertexBufferDirty = null;
-			_uvBufferDirty = null;
-			_secondaryUvBufferDirty = null;
-			_indexBufferDirty = null;
-			_vertexNormalBufferDirty = null;
-			_vertexTangentBufferDirty = null;
-			_customBufferDirty = null;
 		}
-
-		protected function disposeAllVertexBuffers() : void
-		{
-			disposeVertexBuffers(_vertexBuffer);
-			disposeVertexBuffers(_vertexNormalBuffer);
-			disposeVertexBuffers(_uvBuffer);
-			disposeVertexBuffers(_secondaryUvBuffer);
-			disposeVertexBuffers(_vertexTangentBuffer);
-			if (_customBuffer) disposeVertexBuffers(_customBuffer);
-		}
-
+		
 		/**
 		 * The raw vertex position data.
 		 */
 		public function get vertexData() : Vector.<Number>
 		{
-			return _vertices;
+			return _positionsBuffer != null ? _positionsBuffer.data : null;
 		}
-
-		public function updateCustomData(data : Vector.<Number>) : void
-		{
-			invalidateBuffers(_customBufferDirty);
-		}
-
-		/**
-		 * Updates the vertex data of the SubGeometry.
-		 * @param vertices The new vertex data to upload.
-		 */
-		public function updateVertexData(vertices : Vector.<Number>) : void
-		{
-			if (_autoDeriveVertexNormals) _vertexNormalsDirty = true;
-			if (_autoDeriveVertexTangents) _vertexTangentsDirty = true;
-
-			_faceNormalsDirty = true;
-
-			_vertices = vertices;
-			var numVertices : int = vertices.length / 3;
-			if (numVertices != _numVertices) disposeAllVertexBuffers();
-			_numVertices = numVertices;
-            invalidateBuffers(_vertexBufferDirty);
-
-			invalidateBounds();
-		}
-
-		private function invalidateBounds() : void
-		{
-			if (_parentGeometry) _parentGeometry.invalidateBounds(this);
-		}
-
+		
 		/**
 		 * The raw texture coordinate data.
 		 */
+		[Deprecated(replacement="mainUVBufferProxy.data")]
 		public function get UVData() : Vector.<Number>
 		{
-			return _uvs;
+			return _mainUVBuffer != null ? _mainUVBuffer.data : null;
 		}
-
+		
+		/**
+		 * The raw texture coordinate data. Will not work correctly if uv buffer is ComplexVertexBufferProxy.
+		 */
+		[Deprecated(replacement="getVertexBufferSelector(UV, 1).bufferProxy.data")]
 		public function get secondaryUVData() : Vector.<Number>
 		{
-			return _secondaryUvs;
+			var buff:VertexBufferSelector = getUVBufferSelector(1);
+			return buff != null ? buff.bufferProxy.data : null;
 		}
-
-		/**
-		 * Updates the uv coordinates of the SubGeometry.
-		 * @param uvs The uv coordinates to upload.
-		 */
-		public function updateUVData(uvs : Vector.<Number>) : void
-		{
-			// normals don't get dirty from this
-			if (_autoDeriveVertexTangents) _vertexTangentsDirty = true;
-			_faceTangentsDirty = true;
-			_uvs = uvs;
-			invalidateBuffers(_uvBufferDirty);
-		}
-
-		public function updateSecondaryUVData(uvs : Vector.<Number>) : void
-		{
-			_secondaryUvs = uvs;
-			invalidateBuffers(_secondaryUvBufferDirty);
-		}
-
+		
 		/**
 		 * The raw vertex normal data.
 		 */
+		[Deprecated(replacement="normalsBufferProxy.data")]
 		public function get vertexNormalData() : Vector.<Number>
 		{
 			if (_autoDeriveVertexNormals && _vertexNormalsDirty) updateVertexNormals();
-			return _vertexNormals;
+			return _normalsBuffer != null ? _normalsBuffer.data : null;
 		}
-
-		/**
-		 * Updates the vertex normals of the SubGeometry. When updating the vertex normals like this,
-		 * autoDeriveVertexNormals will be set to false and vertex normals will no longer be calculated automatically.
-		 * @param vertexNormals The vertex normals to upload.
-		 */
-		public function updateVertexNormalData(vertexNormals : Vector.<Number>) : void
-		{
-			_vertexNormalsDirty = false;
-			_autoDeriveVertexNormals = (vertexNormals == null);
-			_vertexNormals = vertexNormals;
-			invalidateBuffers(_vertexNormalBufferDirty);
-		}
-
+		
 		/**
 		 * The raw vertex tangent data.
 		 *
 		 * @private
 		 */
+		[Deprecated(replacement="tangentsBufferProxy.data")]
 		public function get vertexTangentData() : Vector.<Number>
 		{
 			if (_autoDeriveVertexTangents && _vertexTangentsDirty) updateVertexTangents();
-			return _vertexTangents;
+			return _tangentsBuffer != null ? _tangentsBuffer.data : null;
 		}
-
-		/**
-		 * Updates the vertex tangents of the SubGeometry. When updating the vertex tangents like this,
-		 * autoDeriveVertexTangents will be set to false and vertex tangents will no longer be calculated automatically.
-		 * @param vertexTangents The vertex tangents to upload.
-		 */
-		public function updateVertexTangentData(vertexTangents : Vector.<Number>) : void
-		{
-			_vertexTangentsDirty = false;
-			_autoDeriveVertexTangents = (vertexTangents == null);
-			_vertexTangents = vertexTangents;
-			invalidateBuffers(_vertexTangentBufferDirty);
-		}
-
+		
 		/**
 		 * The raw index data that define the faces.
 		 *
@@ -555,29 +544,89 @@
 		 */
 		public function get indexData() : Vector.<uint>
 		{
-			return _indices;
+			return _indexBuffer != null ? _indexBuffer.indices : null;
 		}
-
+		
+		/**
+		 * Updates the vertex data of the SubGeometry.
+		 * @param vertices The new vertex data to upload.
+		 */
+		public function updateVertexData(vertices : Vector.<Number>) : void
+		{
+			if(_positionsBuffer == null)
+				addVertexBuffer(new VertexBufferProxy(VertexBufferUsages.POSITIONS, vertices, 3));
+			else
+				_positionsBuffer.data = vertices;
+		}
+		
+		/**
+		 * Updates the uv coordinates of the SubGeometry.
+		 * @param uvs The uv coordinates to upload.
+		 */
+		public function updateUVData(uvs:Vector.<Number>):void
+		{
+			if(_mainUVBuffer == null)
+				addVertexBuffer(new VertexBufferProxy(VertexBufferUsages.UV, uvs, 2));
+			else
+				_mainUVBuffer.data = uvs;
+		}
+		
+		/**
+		 * @deprecated
+		 */
+		public function updateSecondaryUVData(uvs : Vector.<Number>) : void
+		{
+			var selector:VertexBufferSelector = getVertexBufferSelector(VertexBufferUsages.UV, 1);
+			if(selector == null)
+				addVertexBuffer(new VertexBufferProxy(VertexBufferUsages.UV, uvs, 2));
+			else
+				selector.bufferProxy.data = uvs;
+		}
+		
+		/**
+		 * Updates the vertex normals of the SubGeometry. When updating the vertex normals like this,
+		 * autoDeriveVertexNormals will be set to false and vertex normals will no longer be calculated automatically.
+		 * @param vertexNormals The vertex normals to upload.
+		 */
+		public function updateVertexNormalData(vertexNormals:Vector.<Number>):void
+		{
+			_vertexNormalsDirty = false;
+			_autoDeriveVertexNormals = (vertexNormals == null);
+			
+			if(_normalsBuffer == null)
+				addVertexBuffer(new VertexBufferProxy(VertexBufferUsages.NORMALS, vertexNormals, 3));
+			else
+				_normalsBuffer.data = vertexNormals;
+		}
+		
+		/**
+		 * Updates the vertex tangents of the SubGeometry. When updating the vertex tangents like this,
+		 * autoDeriveVertexTangents will be set to false and vertex tangents will no longer be calculated automatically.
+		 * @param vertexTangents The vertex tangents to upload.
+		 */
+		public function updateVertexTangentData(vertexTangents:Vector.<Number>):void
+		{
+			_vertexTangentsDirty = false;
+			_autoDeriveVertexTangents = (vertexTangents == null);
+			
+			if(_tangentsBuffer == null)
+				addVertexBuffer(new VertexBufferProxy(VertexBufferUsages.TANGENTS, vertexTangents, 3));
+			else
+				_tangentsBuffer.data = vertexTangents;
+		}
+		
 		/**
 		 * Updates the face indices of the SubGeometry.
 		 * @param indices The face indices to upload.
 		 */
 		public function updateIndexData(indices : Vector.<uint>) : void
 		{
-			_indices = indices;
-			_numIndices = indices.length;
-
-			var numTriangles : int = _numIndices/3;
-			if (_numTriangles != numTriangles)
-				disposeIndexBuffers(_indexBuffer);
-			_numTriangles = numTriangles;
-			invalidateBuffers(_indexBufferDirty);
-			_faceNormalsDirty = true;
-
-			if (_autoDeriveVertexNormals) _vertexNormalsDirty = true;
-			if (_autoDeriveVertexTangents) _vertexTangentsDirty = true;
+			if(_indexBuffer == null)
+				indexBufferProxy = new IndexBufferProxy(indices);
+			else
+				_indexBuffer.indices = indices;
 		}
-
+		
 		/**
 		 * The raw data of the face normals, in the same order as the faces are listed in the index list.
 		 *
@@ -588,7 +637,7 @@
 			if (_faceNormalsDirty) updateFaceNormals();
 			return _faceNormalsData;
 		}
-
+		
 		/**
 		 * The Geometry object that 'owns' this SubGeometry object.
 		 *
@@ -598,175 +647,234 @@
 		{
 			return _parentGeometry;
 		}
-
+		
 		arcane function set parentGeometry(value : Geometry) : void
 		{
 			_parentGeometry = value;
 		}
-
-		/**
-		 * Invalidates all buffers in a vector, causing them the update when they are first requested.
-		 * @param buffers The vector of buffers to invalidate.
-		 */
-		protected function invalidateBuffers(buffers : Vector.<Boolean>) : void
+		
+		public function get vertexBufferOffset() : int
 		{
-			for (var i : int = 0; i < 8; ++i)
-				buffers[i] = true;
+			return 0;
 		}
-
-		/**
-		 * Disposes all buffers in a given vector.
-		 * @param buffers The vector of buffers to dispose.
-		 */
-		protected function disposeVertexBuffers(buffers : Vector.<VertexBuffer3D>) : void
+		
+		public function get normalBufferOffset() : int
 		{
-			for (var i : int = 0; i < 8; ++i) {
-				if (buffers[i]) {
-					buffers[i].dispose();
-					buffers[i] = null;
-				}
-			}
+			return 0;
 		}
-
-		/**
-		 * Disposes all buffers in a given vector.
-		 * @param buffers The vector of buffers to dispose.
-		 */
-		protected function disposeIndexBuffers(buffers : Vector.<IndexBuffer3D>) : void
+		
+		public function get tangentBufferOffset() : int
 		{
-			for (var i : int = 0; i < 8; ++i) {
-				if (buffers[i]) {
-					buffers[i].dispose();
-					buffers[i] = null;
-				}
-			}
+			return 0;
 		}
-
-		/**
-		 * Updates the vertex normals based on the geometry.
-		 */
+		
+		public function get UVBufferOffset() : int
+		{
+			return 0;
+		}
+		
+		public function get secondaryUVBufferOffset() : int
+		{
+			return 0;
+		}
+		
+		/*
+		* PROTECTED
+		*/
+		protected function disposeForStage3D(stage3DProxy : Stage3DProxy) : void
+		{
+			var index:int = stage3DProxy._stage3DIndex;
+			
+			for each(var selector:VertexBufferSelector in _selectors)
+				selector.bufferProxy.disposeForStage3D(stage3DProxy);
+			
+			if(_indexBuffer != null)
+				_indexBuffer.disposeForStage3D(stage3DProxy);
+		}
+		
+		/*
+		* PRIVATE
+		*/
+		private function invalidateBounds() : void
+		{
+			if (_parentGeometry) _parentGeometry.invalidateBounds(this);
+		}
+		
 		private function updateVertexNormals() : void
 		{
+			var buffer:VertexBufferProxy = _vertexNormalsMapping.getObject([_positionsBuffer, _indexBuffer, _useFaceWeights]) as VertexBufferProxy;
+			if(buffer != null)
+			{
+				if(_normalsBuffer != null)
+					removeVertexBuffer(_normalsBuffer);
+				
+				addVertexBuffer(buffer);
+				return;
+			}
+			
 			if (_faceNormalsDirty)
 				updateFaceNormals();
-
+			
+			var positions:Vector.<Number> = _positionsBuffer.data;
+			var indices:Vector.<uint> = _indexBuffer.indices;
+			
 			var v1 : uint, v2 : uint, v3 : uint;
 			var f1 : uint = 0, f2 : uint = 1, f3 : uint = 2;
-			var lenV : uint = _vertices.length;
-
-			// reset, yo
-			if (_vertexNormals) while (v1 < lenV) _vertexNormals[v1++] = 0.0;
-			else _vertexNormals = new Vector.<Number>(_vertices.length, true);
-
+			var lenV : uint = positions.length;
+			
+			var vertexNormals:Vector.<Number>;
+			
+			if(_normalsBuffer)
+			{
+				_normalsBuffer.clear();
+				vertexNormals = _normalsBuffer.data;
+			}
+			else
+				vertexNormals = new Vector.<Number>(lenV, true);
+			
 			var i : uint, k : uint;
-			var lenI : uint = _indices.length;
+			var lenI : uint = indices.length;
 			var index : uint;
 			var weight : uint;
-
+			
 			while (i < lenI) {
 				weight = _useFaceWeights? _faceWeights[k++] : 1;
-				index = _indices[i++]*3;
-				_vertexNormals[index++] += _faceNormalsData[f1]*weight;
-				_vertexNormals[index++] += _faceNormalsData[f2]*weight;
-				_vertexNormals[index] += _faceNormalsData[f3]*weight;
-				index = _indices[i++]*3;
-				_vertexNormals[index++] += _faceNormalsData[f1]*weight;
-				_vertexNormals[index++] += _faceNormalsData[f2]*weight;
-				_vertexNormals[index] += _faceNormalsData[f3]*weight;
-				index = _indices[i++]*3;
-				_vertexNormals[index++] += _faceNormalsData[f1]*weight;
-				_vertexNormals[index++] += _faceNormalsData[f2]*weight;
-				_vertexNormals[index] += _faceNormalsData[f3]*weight;
+				index = indices[i++]*3;
+				vertexNormals[index++] += _faceNormalsData[f1]*weight;
+				vertexNormals[index++] += _faceNormalsData[f2]*weight;
+				vertexNormals[index] += _faceNormalsData[f3]*weight;
+				index = indices[i++]*3;
+				vertexNormals[index++] += _faceNormalsData[f1]*weight;
+				vertexNormals[index++] += _faceNormalsData[f2]*weight;
+				vertexNormals[index] += _faceNormalsData[f3]*weight;
+				index = indices[i++]*3;
+				vertexNormals[index++] += _faceNormalsData[f1]*weight;
+				vertexNormals[index++] += _faceNormalsData[f2]*weight;
+				vertexNormals[index] += _faceNormalsData[f3]*weight;
 				f1 += 3;
 				f2 += 3;
 				f3 += 3;
 			}
-
+			
 			v1 = 0; v2 = 1; v3 = 2;
 			while (v1 < lenV) {
-				var vx : Number = _vertexNormals[v1];
-				var vy : Number = _vertexNormals[v2];
-				var vz : Number = _vertexNormals[v3];
+				var vx : Number = vertexNormals[v1];
+				var vy : Number = vertexNormals[v2];
+				var vz : Number = vertexNormals[v3];
 				var d : Number = 1.0/Math.sqrt(vx*vx+vy*vy+vz*vz);
-				_vertexNormals[v1] *= d;
-				_vertexNormals[v2] *= d;
-				_vertexNormals[v3] *= d;
+				vertexNormals[v1] *= d;
+				vertexNormals[v2] *= d;
+				vertexNormals[v3] *= d;
 				v1 += 3;
 				v2 += 3;
 				v3 += 3;
 			}
-
+			
 			_vertexNormalsDirty = false;
-			invalidateBuffers(_vertexNormalBufferDirty);
+			
+			if(_normalsBuffer != null)
+				_normalsBuffer.invalidateContent();
+			else
+				_normalsBuffer = new VertexBufferProxy(VertexBufferUsages.NORMALS, vertexNormals, 3);
+			
+			_vertexNormalsMapping.saveObject(_normalsBuffer, [_positionsBuffer, _indexBuffer, _useFaceWeights]);
 		}
-
+		
 		/**
 		 * Updates the vertex tangents based on the geometry.
 		 */
 		private function updateVertexTangents() : void
 		{
-			if (_vertexNormalsDirty) updateVertexNormals();
-
+			var buffer:VertexBufferProxy = _vertexTangentsMapping.getObject([_positionsBuffer, _indexBuffer, _mainUVBuffer]) as VertexBufferProxy;
+			if(buffer != null)
+			{
+				if(_tangentsBuffer != null)
+					removeVertexBuffer(_tangentsBuffer);
+				
+				addVertexBuffer(buffer);
+				return;
+			}
+			
+			if (_vertexNormalsDirty)
+				updateVertexNormals();
+			
 			if (_faceTangentsDirty)
 				updateFaceTangents();
-
+			
+			var positions:Vector.<Number> = _positionsBuffer.data;
+			var indices:Vector.<uint> = _indexBuffer.indices;
+			var numIndices:uint = _indexBuffer.numIndices;
+			
 			var v1 : uint, v2 : uint, v3 : uint;
 			var f1 : uint = 0, f2 : uint = 1, f3 : uint = 2;
-			var lenV : uint = _vertices.length;
-
-			if (_vertexTangents) while (v1 < lenV) _vertexTangents[v1++] = 0.0;
-			else _vertexTangents = new Vector.<Number>(_vertices.length, true);
-
+			var lenV : uint = positions.length;
+			
+			var vertexTangents:Vector.<Number>;
+			
+			if(_tangentsBuffer)
+			{
+				_tangentsBuffer.clear();
+				vertexTangents = _tangentsBuffer.data;
+			}
+			else
+				vertexTangents = new Vector.<Number>(lenV, true);
+			
 			var i : uint, k : uint;
-			var lenI : uint = _indices.length;
+			var lenI : uint = numIndices;
 			var index : uint;
 			var weight : uint;
-
+			
 			while (i < lenI) {
 				weight = _useFaceWeights? _faceWeights[k++] : 1;
-				index = _indices[i++]*3;
-				_vertexTangents[index++] += _faceTangents[f1]*weight;
-				_vertexTangents[index++] += _faceTangents[f2]*weight;
-				_vertexTangents[index] += _faceTangents[f3]*weight;
-				index = _indices[i++]*3;
-				_vertexTangents[index++] += _faceTangents[f1]*weight;
-				_vertexTangents[index++] += _faceTangents[f2]*weight;
-				_vertexTangents[index] += _faceTangents[f3]*weight;
-				index = _indices[i++]*3;
-				_vertexTangents[index++] += _faceTangents[f1]*weight;
-				_vertexTangents[index++] += _faceTangents[f2]*weight;
-				_vertexTangents[index] += _faceTangents[f3]*weight;
+				index = indices[i++]*3;
+				vertexTangents[index++] += _faceTangents[f1]*weight;
+				vertexTangents[index++] += _faceTangents[f2]*weight;
+				vertexTangents[index] += _faceTangents[f3]*weight;
+				index = indices[i++]*3;
+				vertexTangents[index++] += _faceTangents[f1]*weight;
+				vertexTangents[index++] += _faceTangents[f2]*weight;
+				vertexTangents[index] += _faceTangents[f3]*weight;
+				index = indices[i++]*3;
+				vertexTangents[index++] += _faceTangents[f1]*weight;
+				vertexTangents[index++] += _faceTangents[f2]*weight;
+				vertexTangents[index] += _faceTangents[f3]*weight;
 				f1 += 3;
 				f2 += 3;
 				f3 += 3;
 			}
-
+			
 			v1 = 0; v2 = 1; v3 = 2;
 			while (v1 < lenV) {
-				var vx : Number = _vertexTangents[v1];
-				var vy : Number = _vertexTangents[v2];
-				var vz : Number = _vertexTangents[v3];
+				var vx : Number = vertexTangents[v1];
+				var vy : Number = vertexTangents[v2];
+				var vz : Number = vertexTangents[v3];
 				var d : Number = 1.0/Math.sqrt(vx*vx+vy*vy+vz*vz);
-				_vertexTangents[v1] *= d;
-				_vertexTangents[v2] *= d;
-				_vertexTangents[v3] *= d;
+				vertexTangents[v1] *= d;
+				vertexTangents[v2] *= d;
+				vertexTangents[v3] *= d;
 				v1 += 3;
 				v2 += 3;
 				v3 += 3;
 			}
-
+			
 			_vertexTangentsDirty = false;
-			invalidateBuffers(_vertexTangentBufferDirty);
+			
+			if(_tangentsBuffer != null)
+				_tangentsBuffer.invalidateContent();
+			else
+				_tangentsBuffer = new VertexBufferProxy(VertexBufferUsages.TANGENTS, vertexTangents, 3);
+			
+			_vertexTangentsMapping.saveObject(_tangentsBuffer, [_positionsBuffer, _indexBuffer, _mainUVBuffer]);
 		}
-
-		/**
-		 * Updates the normals for each face.
-		 */
+		
 		private function updateFaceNormals() : void
 		{
+			var positions:Vector.<Number> = _positionsBuffer.data;
+			var indices:Vector.<uint> = _indexBuffer.indices;
+			var numIndices:uint = _indexBuffer.numIndices;
+			
 			var i : uint, j : uint, k : uint;
 			var index : uint;
-			var len : uint = _indices.length;
 			var x1 : Number, x2 : Number, x3 : Number;
 			var y1 : Number, y2 : Number, y3 : Number;
 			var z1 : Number, z2 : Number, z3 : Number;
@@ -774,23 +882,23 @@
 			var dx2 : Number, dy2 : Number, dz2 : Number;
 			var cx : Number, cy : Number, cz : Number;
 			var d : Number;
-
-			_faceNormalsData ||= new Vector.<Number>(len, true);
-			if (_useFaceWeights) _faceWeights ||= new Vector.<Number>(len/3, true);
-
-			while (i < len) {
-				index = _indices[i++]*3;
-				x1 = _vertices[index++];
-				y1 = _vertices[index++];
-				z1 = _vertices[index];
-				index = _indices[i++]*3;
-				x2 = _vertices[index++];
-				y2 = _vertices[index++];
-				z2 = _vertices[index];
-				index = _indices[i++]*3;
-				x3 = _vertices[index++];
-				y3 = _vertices[index++];
-				z3 = _vertices[index];
+			
+			_faceNormalsData ||= new Vector.<Number>(numIndices, true);
+			if (_useFaceWeights) _faceWeights ||= new Vector.<Number>(numTriangles, true);
+			
+			while (i < numIndices) {
+				index = indices[i++]*3;
+				x1 = positions[index++];
+				y1 = positions[index++];
+				z1 = positions[index];
+				index = indices[i++]*3;
+				x2 = positions[index++];
+				y2 = positions[index++];
+				z2 = positions[index];
+				index = indices[i++]*3;
+				x3 = positions[index++];
+				y3 = positions[index++];
+				z3 = positions[index];
 				dx1 = x3-x1;
 				dy1 = y3-y1;
 				dz1 = z3-z1;
@@ -812,19 +920,23 @@
 				_faceNormalsData[j++] = cy*d;
 				_faceNormalsData[j++] = cz*d;
 			}
-
+			
 			_faceNormalsDirty = false;
 			_faceTangentsDirty = true;
 		}
-
+		
 		/**
 		 * Updates the tangents for each face.
 		 */
 		private function updateFaceTangents() : void
 		{
+			var positions:Vector.<Number> = _positionsBuffer.data;
+			var uvs:Vector.<Number> = _mainUVBuffer.data;
+			var indices:Vector.<uint> = _indexBuffer.indices;
+			var numIndices:uint = _indexBuffer.numIndices;
+			
 			var i : uint, j : uint;
 			var index1 : uint, index2 : uint, index3 : uint;
-			var len : uint = _indices.length;
 			var ui : uint, vi : uint;
 			var v0 : Number;
 			var dv1 : Number, dv2 : Number;
@@ -833,34 +945,33 @@
 			var dx1 : Number, dy1 : Number, dz1 : Number;
 			var dx2 : Number, dy2 : Number, dz2 : Number;
 			var cx : Number, cy : Number, cz : Number;
-			var invScale : Number = 1/_uvScaleV;
-
-			_faceTangents ||= new Vector.<Number>(_indices.length, true);
-
-			while (i < len) {
-				index1 = _indices[i++];
-				index2 = _indices[i++];
-				index3 = _indices[i++];
-
-				v0 = _uvs[uint((index1 << 1) + 1)];
+			
+			_faceTangents ||= new Vector.<Number>(numIndices, true);
+			
+			while (i < numIndices) {
+				index1 = indices[i++];
+				index2 = indices[i++];
+				index3 = indices[i++];
+				
+				v0 = uvs[uint((index1 << 1) + 1)];
 				ui = index2 << 1;
-				dv1 = (_uvs[uint((index2 << 1) + 1)] - v0)*invScale;
+				dv1 = (uvs[uint((index2 << 1) + 1)] - v0);
 				ui = index3 << 1;
-				dv2 = (_uvs[uint((index3 << 1) + 1)] - v0)*invScale;
-
+				dv2 = (uvs[uint((index3 << 1) + 1)] - v0);
+				
 				vi = index1*3;
-				x0 = _vertices[vi];
-				y0 = _vertices[uint(vi+1)];
-				z0 = _vertices[uint(vi+2)];
+				x0 = positions[vi];
+				y0 = positions[uint(vi+1)];
+				z0 = positions[uint(vi+2)];
 				vi = index2*3;
-				dx1 = _vertices[uint(vi)] - x0;
-				dy1 = _vertices[uint(vi+1)] - y0;
-				dz1 = _vertices[uint(vi+2)] - z0;
+				dx1 = positions[uint(vi)] - x0;
+				dy1 = positions[uint(vi+1)] - y0;
+				dz1 = positions[uint(vi+2)] - z0;
 				vi = index3*3;
-				dx2 = _vertices[uint(vi)] - x0;
-				dy2 = _vertices[uint(vi+1)] - y0;
-				dz2 = _vertices[uint(vi+2)] - z0;
-
+				dx2 = positions[uint(vi)] - x0;
+				dy2 = positions[uint(vi+1)] - y0;
+				dz2 = positions[uint(vi+2)] - z0;
+				
 				cx = dv2*dx1 - dv1*dx2;
 				cy = dv2*dy1 - dv1*dy2;
 				cz = dv2*dz1 - dv1*dz2;
@@ -869,62 +980,84 @@
 				_faceTangents[j++] = denom*cy;
 				_faceTangents[j++] = denom*cz;
 			}
-
+			
 			_faceTangentsDirty = false;
 		}
-
-		protected function disposeForStage3D(stage3DProxy : Stage3DProxy) : void
+		
+		/*
+		* PRIVATE - EVENTS
+		*/
+		private function onPositionsBufferChange(event:Event):void
 		{
-			var index : int = stage3DProxy._stage3DIndex;
-			if (_vertexBuffer[index]) {
-				_vertexBuffer[index].dispose();
-				_vertexBuffer[index] = null;
-			}
-			if (_uvBuffer[index]) {
-				_uvBuffer[index].dispose();
-				_uvBuffer[index] = null;
-			}
-			if (_secondaryUvBuffer[index]) {
-				_secondaryUvBuffer[index].dispose();
-				_secondaryUvBuffer[index] = null;
-			}
-			if (_vertexNormalBuffer[index]) {
-				_vertexNormalBuffer[index].dispose();
-				_vertexNormalBuffer[index] = null;
-			}
-			if (_vertexTangentBuffer[index]) {
-				_vertexTangentBuffer[index].dispose();
-				_vertexTangentBuffer[index] = null;
-			}
-			if (_indexBuffer[index]) {
-				_indexBuffer[index].dispose();
-				_indexBuffer[index] = null;
-			}
+			// second checks ensure that the data change affected the static data (per-frame dataVariation updates doesn't force any update)
+			if(_autoDeriveVertexNormals && (_normalsBuffer == null || _normalsBuffer.dataVariation == null)) _vertexNormalsDirty = true;
+			if(_autoDeriveVertexTangents && (_tangentsBuffer == null || _tangentsBuffer.dataVariation == null)) _vertexTangentsDirty = true;
+			
+			_faceNormalsDirty = true;
+			
+			_vertexTangentsMapping.removeObject([_positionsBuffer, _indexBuffer, _mainUVBuffer]);
 		}
-
-		public function get vertexBufferOffset() : int
+		
+		private function onUVBufferChange(event:Event):void
 		{
-			return 0;
+			if (_autoDeriveVertexTangents) _vertexTangentsDirty = true;
+			_faceTangentsDirty = true;
+			
+			_vertexTangentsMapping.removeObject([_positionsBuffer, _indexBuffer, _mainUVBuffer]);
 		}
-
-		public function get normalBufferOffset() : int
+		
+		private function onIndexBufferChange(event:Event):void
 		{
-			return 0;
+			_faceNormalsDirty = true;
+			
+			if (_autoDeriveVertexNormals) _vertexNormalsDirty = true;
+			if (_autoDeriveVertexTangents) _vertexTangentsDirty = true;
 		}
+	}
+}
 
-		public function get tangentBufferOffset() : int
-		{
-			return 0;
-		}
+import flash.utils.Dictionary;
 
-		public function get UVBufferOffset() : int
+class StructuredMapping
+{
+	private var _dictionary:Dictionary = new Dictionary(true);
+	
+	public function getObject(keys:Array):Object
+	{
+		var current:Object = _dictionary;
+		for each(var key:Object in keys)
 		{
-			return 0;
+			current = current[key];
+			if(current == null)
+				return null;
 		}
-
-		public function get secondaryUVBufferOffset() : int
+		
+		return current;
+	}
+	
+	public function saveObject(object:Object, keys:Array):void
+	{
+		var lastKey:Object = keys.splice(keys.length-1, 1)[0];
+		var current:Object = _dictionary;
+		
+		for each(var key:Object in keys)
+		current = (current[key] ||= new Dictionary(true));
+		
+		current[lastKey] = object;
+	}
+	
+	public function removeObject(keys:Array):void
+	{
+		var lastKey:Object = keys.splice(keys.length-1, 1)[0];
+		var current:Object = _dictionary;
+		
+		for each(var key:Object in keys)
 		{
-			return 0;
+			current = current[key];
+			if(current == null)
+				return;
 		}
+		
+		delete current[lastKey];
 	}
 }

@@ -1,9 +1,13 @@
 package away3d.core.base
 {
 	import away3d.arcane;
+	import away3d.core.base.buffers.VertexBufferProxy;
+	import away3d.core.base.buffers.VertexBufferSelector;
+	import away3d.core.base.buffers.VertexBufferUsages;
 	import away3d.core.managers.Stage3DProxy;
-
+	
 	import flash.display3D.VertexBuffer3D;
+	import flash.events.Event;
 	import flash.utils.Dictionary;
 
 	use namespace arcane;
@@ -15,19 +19,11 @@ package away3d.core.base
 	 */
 	public class SkinnedSubGeometry extends SubGeometry
 	{
-		private var _jointWeightsData : Vector.<Number>;
-		private var _jointIndexData : Vector.<Number>;
-		private var _animatedVertexData : Vector.<Number>;	// used for cpu fallback
-		private var _animatedNormalData : Vector.<Number>;	// used for cpu fallback
-		private var _animatedTangentData : Vector.<Number>;	// used for cpu fallback
-		private var _jointWeightsBuffer : Vector.<VertexBuffer3D> = new Vector.<VertexBuffer3D>(8);
-		private var _jointIndexBuffer : Vector.<VertexBuffer3D> = new Vector.<VertexBuffer3D>(8);
+		private var _jointWeightsProxy : VertexBufferProxy;
+		private var _jointIndexProxy : VertexBufferProxy;
 
-		private var _jointWeightBufferDirty : Vector.<Boolean> = new Vector.<Boolean>(8);
-		private var _jointIndexBufferDirty : Vector.<Boolean> = new Vector.<Boolean>(8);
 		private var _jointsPerVertex : int;
 
-		private var _condensedJointIndexData : Vector.<Number>;
 		private var _condensedIndexLookUp : Vector.<uint>;	// used for linking condensed indices to the real ones
 		private var _numCondensedJoints : uint;
 
@@ -40,6 +36,62 @@ package away3d.core.base
 		{
 			super();
 			_jointsPerVertex = jointsPerVertex;
+		}
+		
+		override public function addVertexBufferSelector(selector:VertexBufferSelector):void
+		{
+			super.addVertexBufferSelector(selector);
+			
+			var buffer:VertexBufferProxy = selector.bufferProxy;
+			
+			switch(selector.usage)
+			{
+				case VertexBufferUsages.POSITIONS:
+					animatedVertexData = new Vector.<Number>(buffer.length);
+					buffer.addEventListener(Event.CHANGE, onPositionsChange);
+					break;
+				
+				case VertexBufferUsages.NORMALS:
+					animatedNormalData = new Vector.<Number>(buffer.length);
+					buffer.addEventListener(Event.CHANGE, onNormalsChange);
+					break;
+				
+				case VertexBufferUsages.TANGENTS:
+					animatedTangentData = new Vector.<Number>(buffer.length);
+					buffer.addEventListener(Event.CHANGE, onTangentsChange);
+					break;
+				
+				case VertexBufferUsages.JOINT_INDICES:
+					_jointIndexProxy = buffer;
+					break;
+				
+				case VertexBufferUsages.JOINT_WEIGHTS:
+					_jointWeightsProxy = buffer;
+					break;
+			}
+		}
+		
+		override public function removeVertexBufferSelector(selector:VertexBufferSelector):void
+		{
+			var buffer:VertexBufferProxy = selector.bufferProxy;
+			
+			if(_positionsBuffer == buffer)
+				_positionsBuffer.removeEventListener(Event.CHANGE, onPositionsChange);
+			if(_normalsBuffer == buffer)
+				_normalsBuffer.removeEventListener(Event.CHANGE, onNormalsChange);
+			if(_tangentsBuffer == buffer)
+				_tangentsBuffer.removeEventListener(Event.CHANGE, onTangentsChange);
+			if(_jointIndexProxy == buffer)
+				_jointIndexProxy = null;
+			if(_jointWeightsProxy == buffer)
+				_jointWeightsProxy = null;
+			
+			super.removeVertexBufferSelector(selector);
+		}
+		
+		public function get jointsPerVertex():int
+		{
+			return _jointsPerVertex;
 		}
 
 		/**
@@ -57,19 +109,31 @@ package away3d.core.base
 		{
 			return _numCondensedJoints;
 		}
+		
+		public function get jointWeightsProxy() : VertexBufferProxy
+		{
+			return _jointWeightsProxy;
+		}
+		
+		public function get jointIndexProxy() : VertexBufferProxy
+		{
+			return _jointIndexProxy;
+		}
 
 		/**
 		 * The animated vertex normals when set explicitly if the skinning transformations couldn't be performed on GPU.
 		 */
 		public function get animatedNormalData() : Vector.<Number>
 		{
-			return _animatedNormalData ||= new Vector.<Number>(_vertices.length, true);
+			return _normalsBuffer != null ? _normalsBuffer.dataVariation : null;
 		}
 
 		public function set animatedNormalData(value : Vector.<Number>) : void
 		{
-			_animatedNormalData = value;
-			invalidateBuffers(_vertexNormalBufferDirty);
+			if(_normalsBuffer == null)
+				addVertexBuffer(new VertexBufferProxy(VertexBufferUsages.NORMALS, null, 3));
+			
+			_normalsBuffer.dataVariation = value;
 		}
 
 		/**
@@ -77,13 +141,15 @@ package away3d.core.base
 		 */
 		public function get animatedTangentData() : Vector.<Number>
 		{
-			return _animatedTangentData ||= new Vector.<Number>(_vertices.length, true);
+			return _tangentsBuffer != null ? _tangentsBuffer.dataVariation : null;
 		}
 
 		public function set animatedTangentData(value : Vector.<Number>) : void
 		{
-			_animatedTangentData = value;
-			invalidateBuffers(_vertexTangentBufferDirty);
+			if(_tangentsBuffer == null)
+				addVertexBuffer(new VertexBufferProxy(VertexBufferUsages.TANGENTS, null, 3));
+			
+			_tangentsBuffer.dataVariation = value;
 		}
 
 		/**
@@ -91,13 +157,15 @@ package away3d.core.base
 		 */
 		public function get animatedVertexData() : Vector.<Number>
 		{
-			return _animatedVertexData ||= new Vector.<Number>(_vertices.length, true);
+			return _positionsBuffer != null ? _positionsBuffer.dataVariation : null;
 		}
 
 		public function set animatedVertexData(value : Vector.<Number>) : void
 		{
-			_animatedVertexData = value;
-			invalidateBuffers(_vertexBufferDirty);
+			if(_positionsBuffer == null)
+				addVertexBuffer(new VertexBufferProxy(VertexBufferUsages.POSITIONS, null, 3));
+			
+			_positionsBuffer.dataVariation = value;
 		}
 
 		/**
@@ -105,15 +173,10 @@ package away3d.core.base
 		 * @param context The Context3D for which we request the buffer
 		 * @return The VertexBuffer3D object that contains joint weights.
 		 */
+		[Deprecated(replacement="getVertexBufferSelector(...) or jointWeightsProxy.getBuffer(...)")]
 		public function getJointWeightsBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
 		{
-			var contextIndex : int = stage3DProxy._stage3DIndex;
-
-			if (_jointWeightBufferDirty[contextIndex] || !_jointWeightsBuffer[contextIndex]) {
-				VertexBuffer3D(_jointWeightsBuffer[contextIndex] ||= stage3DProxy._context3D.createVertexBuffer(_numVertices, _jointsPerVertex)).uploadFromVector(_jointWeightsData, 0, _jointWeightsData.length/_jointsPerVertex);
-				_jointWeightBufferDirty[contextIndex] = false;
-			}
-			return _jointWeightsBuffer[contextIndex];
+			return _jointWeightsProxy.getBuffer(stage3DProxy);
 		}
 
 		/**
@@ -121,114 +184,64 @@ package away3d.core.base
 		 * @param context The Context3D for which we request the buffer
 		 * @return The VertexBuffer3D object that contains joint indices.
 		 */
+		[Deprecated(replacement="getVertexBufferSelector(...) or jointIndexProxy.getBuffer(...)")]
 		public function getJointIndexBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
 		{
-			var contextIndex : int = stage3DProxy._stage3DIndex;
-
-			if (_jointIndexBufferDirty[contextIndex] || !_jointIndexBuffer[contextIndex]) {
-				VertexBuffer3D(_jointIndexBuffer[contextIndex] ||= stage3DProxy._context3D.createVertexBuffer(_numVertices, _jointsPerVertex)).uploadFromVector(_numCondensedJoints > 0? _condensedJointIndexData : _jointIndexData, 0, _jointIndexData.length/_jointsPerVertex);
-				_jointIndexBufferDirty[contextIndex] = false;
-			}
-			return _jointIndexBuffer[contextIndex];
+			return _jointIndexProxy.getBuffer(stage3DProxy);
 		}
-
-		/**
-		 * @inheritDoc
-		 */
-		override public function getVertexBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
-		{
-			var contextIndex : int = stage3DProxy._stage3DIndex;
-
-			if (_animatedVertexData) {
-				if (_vertexBufferDirty[contextIndex] || !_vertexBuffer[contextIndex]) {
-					VertexBuffer3D(_vertexBuffer[contextIndex] ||= stage3DProxy._context3D.createVertexBuffer(_animatedVertexData.length/3, 3)).uploadFromVector(_animatedVertexData, 0, _animatedVertexData.length/3);
-					_vertexBufferDirty[contextIndex] = false;
-				}
-			    return _vertexBuffer[contextIndex];
-			}
-			else
-				return super.getVertexBuffer(stage3DProxy);
-		}
-
-		/**
-		 * @inheritDoc
-		 */
-		override public function getVertexNormalBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
-		{
-			var contextIndex : int = stage3DProxy._stage3DIndex;
-
-			if (_animatedNormalData) {
-				if (_vertexNormalBufferDirty[contextIndex] || !_vertexNormalBuffer[contextIndex]) {
-					(_vertexNormalBuffer[contextIndex] ||= stage3DProxy._context3D.createVertexBuffer(_animatedNormalData.length/3, 3)).uploadFromVector(_animatedNormalData, 0, _animatedNormalData.length/3);
-					_vertexNormalBufferDirty[contextIndex] = false;
-				}
-			    return _vertexNormalBuffer[contextIndex];
-			}
-			else
-				return super.getVertexNormalBuffer(stage3DProxy);
-		}
-
-		/**
-		 * @inheritDoc
-		 */
-		override public function getVertexTangentBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
-		{
-			var contextIndex : int = stage3DProxy._stage3DIndex;
-
-			if (_animatedTangentData) {
-				if (_vertexTangentBufferDirty[contextIndex] || !_vertexTangentBuffer[contextIndex]) {
-					(_vertexTangentBuffer[contextIndex] ||= stage3DProxy._context3D.createVertexBuffer(_animatedTangentData.length/3, 3)).uploadFromVector(_animatedTangentData, 0, _animatedTangentData.length/3);
-					_vertexTangentBufferDirty[contextIndex] = false;
-				}
-			    return _vertexTangentBuffer[contextIndex];
-			}
-			else
-				return super.getVertexTangentBuffer(stage3DProxy);
-		}
+		
 		/**
 		 * Clones the current object.
 		 * @return An exact duplicate of the current object.
 		 */
-		override public function clone() : SubGeometry
+		override public function clone(cloneBuffers:Boolean=false) : SubGeometry
 		{
-			var clone : SkinnedSubGeometry = new SkinnedSubGeometry(_jointsPerVertex);
-			clone.updateVertexData(_vertices.concat());
-			clone.updateUVData(_uvs.concat());
-			clone.updateIndexData(_indices.concat());
-			clone.updateJointIndexData(_jointIndexData.concat());
-			clone.updateJointWeightsData(_jointWeightsData.concat());
-			if (!autoDeriveVertexNormals) clone.updateVertexNormalData(_vertexNormals.concat());
-			if (!autoDeriveVertexTangents) clone.updateVertexTangentData(_vertexTangents.concat());
+			var selector:VertexBufferSelector;
+			
+			var clone:SkinnedSubGeometry = new SkinnedSubGeometry(_jointsPerVertex);
+			
+			if(!cloneBuffers)
+			{
+				for each(selector in _selectors)
+				clone.addVertexBufferSelector(selector);
+			}
+			else
+			{
+				var buffersClones:Dictionary = new Dictionary();
+				for each(selector in _selectors)			// clone buffers referenced by selectors
+					if(buffersClones[selector.bufferProxy] == null)
+						buffersClones[selector.bufferProxy.clone()];
+				
+				for each(selector in _selectors)			// find correct selectors in cloned buffers
+					for each(var selector2:VertexBufferSelector in selector.bufferProxy.selectors)
+						if(selector.usage == selector2.usage && selector.offset == selector2.offset)
+							clone.addVertexBufferSelector(selector2);
+			}
+			
+			clone._indexBuffer = cloneBuffers ? _indexBuffer.clone() : _indexBuffer;
+			
 			clone._numCondensedJoints = _numCondensedJoints;
 			clone._condensedIndexLookUp = _condensedIndexLookUp;
-			clone._condensedJointIndexData = _condensedJointIndexData;
+			
 			return clone;
-		}
-
-		/**
-		 * Cleans up any resources used by this object.
-		 */
-		override public function dispose() : void
-		{
-			super.dispose();
-			disposeVertexBuffers(_jointWeightsBuffer);
-			disposeVertexBuffers(_jointIndexBuffer);
 		}
 
 		/**
 		 */
 		arcane function condenseIndexData() : void
 		{
-			var len : int = _jointIndexData.length;
+			var jointIndexData:Vector.<Number> = _jointIndexProxy.data;
+			
+			var len : int = jointIndexData.length;
 			var oldIndex : int;
 			var newIndex : int = 0;
 			var dic : Dictionary = new Dictionary();
 
-			_condensedJointIndexData = new Vector.<Number>(len, true);
+			var condensedJointIndexData:Vector.<Number> = new Vector.<Number>(len, true);
 			_condensedIndexLookUp = new Vector.<uint>();
 
 			for (var i : int = 0; i < len; ++i) {
-				oldIndex = _jointIndexData[i];
+				oldIndex = jointIndexData[i];
 
 				// if we encounter a new index, assign it a new condensed index
 				if (dic[oldIndex] == undefined) {
@@ -237,11 +250,11 @@ package away3d.core.base
 					_condensedIndexLookUp[newIndex++] = oldIndex+1;
 					_condensedIndexLookUp[newIndex++] = oldIndex+2;
 				}
-				_condensedJointIndexData[i] = dic[oldIndex];
+				condensedJointIndexData[i] = dic[oldIndex];
 			}
 			_numCondensedJoints = newIndex/3;
-
-			invalidateBuffers(_jointIndexBufferDirty);
+			
+			_jointIndexProxy.dataVariation = condensedJointIndexData;
 		}
 
 
@@ -250,7 +263,7 @@ package away3d.core.base
 		 */
 		arcane function get jointWeightsData() : Vector.<Number>
 		{
-			return _jointWeightsData;
+			return _jointWeightsProxy != null ? _jointWeightsProxy.data : null;
 		}
 
 		arcane function updateJointWeightsData(value : Vector.<Number>) : void
@@ -258,10 +271,11 @@ package away3d.core.base
 			// invalidate condensed stuff
 			_numCondensedJoints = 0;
 			_condensedIndexLookUp = null;
-			_condensedJointIndexData = null;
 
-			_jointWeightsData = value;
-			invalidateBuffers(_jointWeightBufferDirty);
+			if(_jointWeightsProxy == null)
+				addVertexBuffer(new VertexBufferProxy(VertexBufferUsages.JOINT_WEIGHTS, value, _jointsPerVertex));
+			else
+				_jointWeightsProxy.data = value;
 		}
 
 		/**
@@ -269,29 +283,30 @@ package away3d.core.base
 		 */
 		arcane function get jointIndexData() : Vector.<Number>
 		{
-			return _jointIndexData;
+			return _jointIndexProxy != null ? _jointIndexProxy.data : null;
 		}
 
 		arcane function updateJointIndexData(value : Vector.<Number>) : void
 		{
-			_jointIndexData = value;
-			invalidateBuffers(_jointIndexBufferDirty);
+			if(_jointIndexProxy == null)
+				addVertexBuffer(new VertexBufferProxy(VertexBufferUsages.JOINT_INDICES, value, _jointsPerVertex));
+			else
+				_jointIndexProxy.data = value;
 		}
-
-
-		override protected function disposeForStage3D(stage3DProxy : Stage3DProxy) : void
+		
+		private function onPositionsChange(event:Event):void
 		{
-			super.disposeForStage3D(stage3DProxy);
-
-			var index : int = stage3DProxy._stage3DIndex;
-			if (_jointWeightsBuffer[index]) {
-				_jointWeightsBuffer[index].dispose();
-				_jointWeightsBuffer[index] = null;
-			}
-			if (_jointIndexBuffer[index]) {
-				_jointIndexBuffer[index].dispose();
-				_jointIndexBuffer[index] = null;
-			}
+			_positionsBuffer.dataVariation.length = _positionsBuffer.data.length;		// make animated vertex data have the same length as source data
+		}
+		
+		private function onNormalsChange(event:Event):void
+		{
+			_normalsBuffer.dataVariation.length = _normalsBuffer.data.length;		// make animated vertex data have the same length as source data
+		}
+		
+		private function onTangentsChange(event:Event):void
+		{
+			_tangentsBuffer.dataVariation.length = _tangentsBuffer.data.length;		// make animated vertex data have the same length as source data
 		}
 	}
 }

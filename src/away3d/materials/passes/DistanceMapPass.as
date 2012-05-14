@@ -3,9 +3,11 @@
 	import away3d.arcane;
 	import away3d.cameras.Camera3D;
 	import away3d.core.base.IRenderable;
+	import away3d.core.base.buffers.VertexBufferUsages;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.materials.lightpickers.LightPickerBase;
 	import away3d.textures.Texture2DBase;
+	
 	import flash.display3D.Context3DProgramType;
 	import flash.display3D.Context3DVertexBufferFormat;
 	import flash.geom.Vector3D;
@@ -134,7 +136,7 @@
 			stage3DProxy._context3D.setProgramConstantsFromVector(Context3DProgramType.VERTEX, 9, _vertexData, 1);
 
 			if (_alphaThreshold > 0)
-				stage3DProxy.setSimpleVertexBuffer(1, renderable.getUVBuffer(stage3DProxy), Context3DVertexBufferFormat.FLOAT_2, renderable.UVBufferOffset);
+				stage3DProxy.setVertexBufferSelector(1, renderable.getVertexBufferSelector(VertexBufferUsages.UV));
 
 			super.render(renderable, stage3DProxy, camera, lightPicker);
 		}

@@ -8,16 +8,18 @@ package away3d.primitives
 	import away3d.cameras.Camera3D;
 	import away3d.core.base.IRenderable;
 	import away3d.core.base.SubGeometry;
+	import away3d.core.base.buffers.IndexBufferProxy;
+	import away3d.core.base.buffers.VertexBufferSelector;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.core.partition.EntityNode;
 	import away3d.core.partition.SkyBoxNode;
+	import away3d.core.raycast.MouseHitMethod;
 	import away3d.entities.Entity;
 	import away3d.errors.AbstractMethodError;
 	import away3d.materials.MaterialBase;
 	import away3d.materials.SkyBoxMaterial;
 	import away3d.textures.CubeTextureBase;
-	import away3d.core.raycast.MouseHitMethod;
-
+	
 	import flash.display3D.IndexBuffer3D;
 	import flash.display3D.VertexBuffer3D;
 	import flash.geom.Matrix;
@@ -64,39 +66,9 @@ package away3d.primitives
 		 * @param context The Context3D for which we request the buffer
 		 * @return The VertexBuffer3D object that contains vertex positions.
 		 */
-		public function getVertexBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
+		public function getVertexBufferSelector( usage:String, index:uint=0 ) : VertexBufferSelector
 		{
-			return _geometry.getVertexBuffer(stage3DProxy);
-		}
-
-		/**
-		 * Retrieves the VertexBuffer3D object that contains texture coordinates.
-		 * @param context The Context3D for which we request the buffer
-		 * @return The VertexBuffer3D object that contains texture coordinates.
-		 */
-		public function getUVBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
-		{
-			return null;
-		}
-
-		/**
-		 * Retrieves the VertexBuffer3D object that contains vertex normals.
-		 * @param context The Context3D for which we request the buffer
-		 * @return The VertexBuffer3D object that contains vertex normals.
-		 */
-		public function getVertexNormalBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
-		{
-			return null;
-		}
-
-		/**
-		 * Retrieves the VertexBuffer3D object that contains vertex tangents.
-		 * @param context The Context3D for which we request the buffer
-		 * @return The VertexBuffer3D object that contains vertex tangents.
-		 */
-		public function getVertexTangentBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
-		{
-			return null;
+			return _geometry.getVertexBufferSelector(usage, index);
 		}
 
 		/**
@@ -104,9 +76,9 @@ package away3d.primitives
 		 * @param context The Context3D for which we request the buffer
 		 * @return The VertexBuffer3D object that contains triangle indices.
 		 */
-		public function getIndexBuffer(stage3DProxy : Stage3DProxy) : IndexBuffer3D
+		public function getIndexBufferProxy() : IndexBufferProxy
 		{
-			return _geometry.getIndexBuffer(stage3DProxy);
+			return _geometry.indexBufferProxy;
 		}
 
 		/**
@@ -247,52 +219,6 @@ package away3d.primitives
 		public function get uvTransform() : Matrix
 		{
 			return _uvTransform;
-		}
-
-		public function getSecondaryUVBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D {
-			return null;
-		}
-
-		public function getCustomBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D
-		{
-			return null;
-		}
-
-		public function get vertexBufferOffset() : int
-		{
-			return 0;
-		}
-
-		public function get normalBufferOffset() : int
-		{
-			return 0;
-		}
-
-		public function get tangentBufferOffset() : int
-		{
-			return 0;
-		}
-
-		public function get UVBufferOffset() : int
-		{
-			return 0;
-		}
-
-		public function get secondaryUVBufferOffset() : int
-		{
-			return 0;
-		}
-
-		public function get vertexData():Vector.<Number> {
-			return _geometry.vertexData;
-		}
-
-		public function get indexData():Vector.<uint> {
-			return _geometry.indexData;
-		}
-
-		public function get UVData():Vector.<Number> {
-			return _geometry.UVData;
 		}
 	}
 }

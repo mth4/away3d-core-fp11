@@ -1,9 +1,10 @@
 package away3d.core.managers
 {
 	import away3d.arcane;
+	import away3d.core.base.buffers.VertexBufferSelector;
 	import away3d.debug.Debug;
 	import away3d.events.Stage3DEvent;
-
+	
 	import flash.display.Stage3D;
 	import flash.display3D.Context3D;
 	import flash.display3D.Program3D;
@@ -61,6 +62,11 @@ package away3d.core.managers
 			// whatever happens, be sure this has highest priority
 			_stage3D.addEventListener(Event.CONTEXT3D_CREATE, onContext3DUpdate, false, 1000, false);
 			requestContext();
+		}
+		
+		public function setVertexBufferSelector(index : int, selector : VertexBufferSelector) : void
+		{
+			setSimpleVertexBuffer(index, selector.bufferProxy.getBuffer(this), selector.format, selector.offset);
 		}
 
 		public function setSimpleVertexBuffer(index : int, buffer : VertexBuffer3D, format : String, offset : int) : void

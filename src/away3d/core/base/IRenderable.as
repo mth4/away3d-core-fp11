@@ -1,9 +1,13 @@
 package away3d.core.base
 {
 
+	import away3d.core.base.buffers.IndexBufferProxy;
+	import away3d.core.base.buffers.VertexBufferProxy;
+	import away3d.core.base.buffers.VertexBufferSelector;
+	import away3d.core.base.buffers.VertexBufferUsages;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.entities.Entity;
-
+	
 	import flash.display3D.IndexBuffer3D;
 	import flash.display3D.VertexBuffer3D;
 	import flash.geom.Matrix;
@@ -50,49 +54,17 @@ package away3d.core.base
 		function get mouseHitMethod():uint;
 
 		/**
-		 * Retrieves the VertexBuffer3D object that contains vertex positions.
-		 * @param context The Context3D for which we request the buffer
-		 * @return The VertexBuffer3D object that contains vertex positions.
+		 * Retrieves the VertexBufferProxy object that corresponds to the passed parameters.
+		 * @return The VertexBufferProxy object that proxies an associated buffer.
 		 */
-		function getVertexBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D;
-
-		/**
-		 * Retrieves a custom buffer that can contain any per-vertex data
-		 * @param stage3DProxy
-		 * @return The VertexBuffer3D object containing the data?
-		 */
-		function getCustomBuffer(stage3DProxy : Stage3DProxy) : VertexBuffer3D;
-
-		/**
-		 * Retrieves the VertexBuffer3D object that contains texture coordinates.
-		 * @param context The Context3D for which we request the buffer
-		 * @return The VertexBuffer3D object that contains texture coordinates.
-		 */
-		function getUVBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D;
-
-
-		function getSecondaryUVBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D;
-
-		/**
-		 * Retrieves the VertexBuffer3D object that contains vertex normals.
-		 * @param context The Context3D for which we request the buffer
-		 * @return The VertexBuffer3D object that contains vertex normals.
-		 */
-		function getVertexNormalBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D;
-
-		/**
-		 * Retrieves the VertexBuffer3D object that contains vertex tangents.
-		 * @param context The Context3D for which we request the buffer
-		 * @return The VertexBuffer3D object that contains vertex tangents.
-		 */
-		function getVertexTangentBuffer( stage3DProxy:Stage3DProxy ):VertexBuffer3D;
+		function getVertexBufferSelector( usage:String, index:uint=0 ):VertexBufferSelector;
 
 		/**
 		 * Retrieves the VertexBuffer3D object that contains triangle indices.
 		 * @param context The Context3D for which we request the buffer
 		 * @return The VertexBuffer3D object that contains triangle indices.
 		 */
-		function getIndexBuffer( stage3DProxy:Stage3DProxy ):IndexBuffer3D;
+		function getIndexBufferProxy():IndexBufferProxy;
 
 		/**
 		 * The amount of triangles that comprise the IRenderable geometry.
@@ -109,27 +81,6 @@ package away3d.core.base
 		 */
 		function get castsShadows():Boolean;
 
-		/**
-		 * Retrieves the object's vertices as a Number array.
-		 */
-		function get vertexData():Vector.<Number>;
-
-		/**
-		 * Retrieves the object's indices as a uint array.
-		 */
-		function get indexData():Vector.<uint>;
-
-		/**
-		 * Retrieves the object's uvs as a Number array.
-		 */
-		function get UVData():Vector.<Number>;
-
 		function get uvTransform():Matrix;
-
-		function get vertexBufferOffset() : int;
-		function get normalBufferOffset() : int;
-		function get tangentBufferOffset() : int;
-		function get UVBufferOffset() : int;
-		function get secondaryUVBufferOffset() : int;
 	}
 }
