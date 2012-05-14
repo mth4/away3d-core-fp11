@@ -132,8 +132,7 @@ package away3d.core.base
 		protected var _x : Number = 0;
 		protected var _y : Number = 0;
 		protected var _z : Number = 0;
-		protected var _pivotPoint : Vector3D = new Vector3D();
-		protected var _pivotZero : Boolean = true;
+		protected var _pivotPoint : Vector3D;
 		protected var _pos:Vector3D = new Vector3D();
 		protected var _rot:Vector3D = new Vector3D();
 		protected var _sca:Vector3D = new Vector3D();
@@ -396,9 +395,7 @@ package away3d.core.base
 		
 		public function set pivotPoint(pivot : Vector3D) : void
 		{
-			_pivotPoint = pivot.clone();
-
-			_pivotZero = (_pivotPoint.x == 0) && (_pivotPoint.y == 0) && (_pivotPoint.z == 0);
+			_pivotPoint = pivot != null ? pivot.clone() : null;
 			
 			 notifyPositionChange();
 		}
@@ -588,9 +585,14 @@ package away3d.core.base
 		 */
 		public function movePivot(dx : Number, dy : Number, dz : Number) : void
 		{
-			_pivotPoint.x = dx;
-			_pivotPoint.y = dy;
-			_pivotPoint.z = dz;
+			if(_pivotPoint != null)
+			{
+				_pivotPoint.x = dx;
+				_pivotPoint.y = dy;
+				_pivotPoint.z = dz;
+			}
+			else
+				_pivotPoint = new Vector3D(dx, dy, dz);
 			
 			notifyPositionChange();
 		}
@@ -779,18 +781,18 @@ package away3d.core.base
 
 		protected function updateTransform() : void
 		{
-			if (_pivotZero) {
-				_pos.x = _x;
-				_pos.y = _y;
-				_pos.z = _z;
-			} else {
-				_pos.x = -_pivotPoint.x;
-				_pos.y = -_pivotPoint.y;
-				_pos.z = -_pivotPoint.z;
+			_pos.x = _x;
+			_pos.y = _y;
+			_pos.z = _z;
+			
+			if(_pivotPoint == null)
+			{
+				_rot.x = _rotationX;
+				_rot.y = _rotationY;
+				_rot.z = _rotationZ;
 			}
-			_rot.x = _rotationX;
-			_rot.y = _rotationY;
-			_rot.z = _rotationZ;
+			else
+				_rot.x = _rot.y = _rot.z = 0;
 			
 			_sca.x = _scaleX;
 			_sca.y = _scaleY;
@@ -798,9 +800,13 @@ package away3d.core.base
 			
 			_transform.recompose(Vector.<Vector3D>([_pos, _rot, _sca]));
 			
-			if (!_pivotZero)
-				_transform.appendTranslation(_x + _pivotPoint.x, _y + _pivotPoint.y, _z + _pivotPoint.z);
-
+			if (_pivotPoint != null)
+			{
+				_transform.appendRotation(rotationX, Vector3D.X_AXIS, _pivotPoint);
+				_transform.appendRotation(rotationY, Vector3D.Y_AXIS, _pivotPoint);
+				_transform.appendRotation(rotationZ, Vector3D.Z_AXIS, _pivotPoint);
+			}
+			
 			_transformDirty = false;
 		}
 	}
