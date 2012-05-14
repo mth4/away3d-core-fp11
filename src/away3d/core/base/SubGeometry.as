@@ -499,7 +499,6 @@
 		/**
 		 * The raw texture coordinate data.
 		 */
-		[Deprecated(replacement="mainUVBufferProxy.data")]
 		public function get UVData() : Vector.<Number>
 		{
 			return _mainUVBuffer != null ? _mainUVBuffer.data : null;
@@ -518,7 +517,6 @@
 		/**
 		 * The raw vertex normal data.
 		 */
-		[Deprecated(replacement="normalsBufferProxy.data")]
 		public function get vertexNormalData() : Vector.<Number>
 		{
 			if (_autoDeriveVertexNormals && _vertexNormalsDirty) updateVertexNormals();
@@ -530,7 +528,6 @@
 		 *
 		 * @private
 		 */
-		[Deprecated(replacement="tangentsBufferProxy.data")]
 		public function get vertexTangentData() : Vector.<Number>
 		{
 			if (_autoDeriveVertexTangents && _vertexTangentsDirty) updateVertexTangents();

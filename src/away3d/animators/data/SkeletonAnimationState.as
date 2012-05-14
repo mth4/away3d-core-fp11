@@ -9,9 +9,10 @@ package away3d.animators.data
 	import away3d.core.base.IRenderable;
 	import away3d.core.base.SkinnedSubGeometry;
 	import away3d.core.base.SubMesh;
+	import away3d.core.base.buffers.VertexBufferUsages;
 	import away3d.core.managers.Stage3DProxy;
 	import away3d.core.math.Quaternion;
-
+	
 	import flash.display3D.Context3DProgramType;
 	import flash.geom.Vector3D;
 	import flash.utils.Dictionary;
@@ -30,7 +31,6 @@ package away3d.animators.data
 		private var _numJoints : uint;
 		private var _skinnedAnimation : SkeletonAnimation;
 		private var _jointsPerVertex : uint;
-		private var _bufferFormat : String;
         private var _skeleton : Skeleton;
         private var _blendTree : SkeletonTreeNode;
         private var _globalPose : SkeletonPose;
@@ -62,7 +62,6 @@ package away3d.animators.data
             _skeleton = _skinnedAnimation.skeleton;
             _numJoints = _skinnedAnimation.numJoints;
 			_globalMatrices = new Vector.<Number>(_numJoints*12, true);
-			_bufferFormat = "float"+_jointsPerVertex;
             _globalPose = new SkeletonPose();
 
 			var j : int;
@@ -174,8 +173,8 @@ package away3d.animators.data
 				stage3DProxy._context3D.setProgramConstantsFromVector(Context3DProgramType.VERTEX, vertexConstantOffset, _globalMatrices, _numJoints*3);
 			}
 
-			stage3DProxy.setSimpleVertexBuffer(vertexStreamOffset, skinnedGeom.getJointIndexBuffer(stage3DProxy), _bufferFormat, 0);
-			stage3DProxy.setSimpleVertexBuffer(vertexStreamOffset+1, skinnedGeom.getJointWeightsBuffer(stage3DProxy), _bufferFormat, 0);
+			stage3DProxy.setVertexBufferSelector(vertexStreamOffset, skinnedGeom.getVertexBufferSelector(VertexBufferUsages.JOINT_INDICES));
+			stage3DProxy.setVertexBufferSelector(vertexStreamOffset+1, skinnedGeom.getVertexBufferSelector(VertexBufferUsages.JOINT_WEIGHTS));
 		}
 
 		private function updateCondensedMatrices(condensedIndexLookUp : Vector.<uint>, numJoints : uint) : void
@@ -297,11 +296,11 @@ package away3d.animators.data
 		private function morphGeometry(subGeom : SkinnedSubGeometry) : void
 		{
 			var verts : Vector.<Number> = subGeom.vertexData;
-			var normals : Vector.<Number> = subGeom.vertexNormalData;
-			var tangents : Vector.<Number> = subGeom.vertexTangentData;
-			var targetVerts : Vector.<Number> = subGeom.animatedVertexData;
-			var targetNormals : Vector.<Number> = subGeom.animatedNormalData;
-			var targetTangents : Vector.<Number> = subGeom.animatedTangentData;
+			var normals : Vector.<Number> = subGeom.normalsProxy.data;
+			var tangents : Vector.<Number> = subGeom.tangentsProxy.data;
+			var targetVerts : Vector.<Number> = (subGeom.animatedVertexData ||= new Vector.<Number>(subGeom.numVertices*3));
+			var targetNormals : Vector.<Number> = (subGeom.animatedNormalData ||= new Vector.<Number>(subGeom.numVertices*3));
+			var targetTangents : Vector.<Number> = (subGeom.animatedTangentData ||= new Vector.<Number>(subGeom.numVertices*3));
 			var jointIndices : Vector.<Number> = subGeom.jointIndexData;
 			var jointWeights : Vector.<Number> = subGeom.jointWeightsData;
 			var i1 : uint, i2 : uint = 1, i3 : uint = 2;
@@ -362,9 +361,10 @@ package away3d.animators.data
 
 				i1 += 3; i2 += 3; i3 += 3;
 			}
-			subGeom.animatedVertexData = targetVerts;
-			subGeom.animatedNormalData = targetNormals;
-			subGeom.animatedTangentData = targetTangents;
+			
+			subGeom.positionsProxy.invalidateContent();
+			subGeom.normalsProxy.invalidateContent();
+			subGeom.tangentsProxy.invalidateContent();
 		}
 
 		public function applyRootDelta() : void
