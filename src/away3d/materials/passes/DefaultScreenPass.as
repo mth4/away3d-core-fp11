@@ -20,7 +20,7 @@ package away3d.materials.passes
 	import away3d.materials.utils.ShaderRegisterCache;
 	import away3d.materials.utils.ShaderRegisterElement;
 	import away3d.textures.Texture2DBase;
-
+	
 	import flash.display3D.Context3D;
 	import flash.display3D.Context3DProgramType;
 	import flash.display3D.Context3DVertexBufferFormat;
@@ -204,10 +204,8 @@ package away3d.materials.passes
 				_colorTransformMethod.colorTransform = value;
 				_colorTransformMethod.parentPass = this;
 			}
-			else if (!value) {
-				_colorTransformMethod.parentPass = null;
-				colorTransformMethod = _colorTransformMethod = null;
-			}
+			else if (!value)
+				_colorTransformMethod = colorTransformMethod = null;
 		}
 
 		/**
