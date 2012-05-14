@@ -28,6 +28,8 @@ package away3d.loaders.parsers
 		private var _startedParsing : Boolean;
 		private var _doneParsing : Boolean;
 		private var _loader : Loader;
+		
+		static private var _supportedFormats:Vector.<String> = Vector.<String>(["jpg", "jpeg", "png", "gif", "bmp", "jxr", "tiff"]);
 
 		
 
@@ -67,8 +69,7 @@ package away3d.loaders.parsers
 
 			extension = extension.toLowerCase();
 
-			return extension == "jpg" || extension == "jpeg" || extension == "png" || extension == "gif" || extension == "bmp";
-
+			return _supportedFormats.indexOf(extension) != -1;
 		}
 
 		
