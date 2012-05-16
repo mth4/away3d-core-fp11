@@ -71,14 +71,17 @@ package away3d.core.base
 
 		private var _flipY : Matrix3D = new Matrix3D();
 		
-		private function notifyPositionChange():void
+		private function notifyPositionChange(invalidate:Boolean=true):void
 		{
 			if (_positionDirty)
 				return;
 			
-			invalidateTransform();
-			
-			_positionDirty = true;
+			if(invalidate)
+			{
+				invalidateTransform();
+				
+				_positionDirty = true;
+			}
 			
 			if (!hasEventListener(Object3DEvent.POSITION_CHANGED))
 				return;
@@ -89,14 +92,17 @@ package away3d.core.base
 			dispatchEvent(_positionChanged);
 		}
 		
-		private function notifyRotationChange():void
+		private function notifyRotationChange(invalidate:Boolean=true):void
 		{
 			if (_rotationDirty)
 				return;
 			
-			invalidateTransform();
-			
-			_rotationDirty = true;
+			if(invalidate)
+			{
+				invalidateTransform();
+				
+				_rotationDirty = true;
+			}
 			
 			if (!hasEventListener(Object3DEvent.ROTATION_CHANGED))
 				return;
@@ -107,14 +113,17 @@ package away3d.core.base
 			dispatchEvent(_rotationChanged);
 		}
 		
-		private function notifyScaleChange():void
+		private function notifyScaleChange(invalidate:Boolean=true):void
 		{
 			if (_scaleDirty)
 				return;
 			
-			invalidateTransform();
-			
-			_scaleDirty = true;
+			if(invalidate)
+			{
+				invalidateTransform();
+				
+				_scaleDirty = true;
+			}
 			
 			if (!hasEventListener(Object3DEvent.SCALE_CHANGED))
 				return;
@@ -343,6 +352,9 @@ package away3d.core.base
 		
 		public function set transform(val:Matrix3D) : void
 		{
+			var vec : Vector3D;
+			var c : Matrix3D;
+			
 			//ridiculous matrix error
 			if (!val.rawData[uint(0)]) {
 				var raw:Vector.<Number> = Matrix3DUtils.RAW_DATA_CONTAINER;
@@ -351,17 +363,37 @@ package away3d.core.base
 				val.copyRawDataFrom(raw);
 			}
 			
-			var elements : Vector.<Vector3D> = val.decompose();
-			var vec : Vector3D;
+			_transform = val;
 			
-			vec = elements[0];
+			if(_pivotPoint != null)
+			{
+				c = new Matrix3D();
+				c.copyFrom(val);
+				
+				var s:Vector3D = c.decompose()[1];
+				c.prependTranslation(_pivotPoint.x, _pivotPoint.y, _pivotPoint.z);
+				c.appendTranslation(-_pivotPoint.x * s.x, -_pivotPoint.y * s.y, -_pivotPoint.z * s.z);
+				
+				var m:Matrix3D = new Matrix3D();
+				m.copyFrom(c);
+				m.invert();
+				m.position = new Vector3D();
+				vec = m.transformVector(c.position);
+			}
+			else
+				c = val;
+			
+			var elements : Vector.<Vector3D> = c.decompose();
+			
+			if(_pivotPoint == null)
+				vec = elements[0];
 			
 			if (_x != vec.x || _y != vec.y || _z != vec.z) {
 				_x = vec.x;
 				_y = vec.y;
 				_z = vec.z;
 				
-				notifyPositionChange();
+				notifyPositionChange(false);
 			}
 			
 			vec = elements[1];
@@ -371,7 +403,7 @@ package away3d.core.base
 				_rotationY = vec.y;
 				_rotationZ = vec.z;
 				
-				notifyRotationChange();
+				notifyRotationChange(false);
 			}
 			
 			vec = elements[2];
@@ -381,7 +413,7 @@ package away3d.core.base
 				_scaleY = vec.y;
 				_scaleZ = vec.z;
 				
-				notifyScaleChange();
+				notifyScaleChange(false);
 			}
 		}
 
@@ -785,26 +817,22 @@ package away3d.core.base
 			_pos.y = _y;
 			_pos.z = _z;
 			
-			if(_pivotPoint == null)
-			{
-				_rot.x = _rotationX;
-				_rot.y = _rotationY;
-				_rot.z = _rotationZ;
-			}
-			else
-				_rot.x = _rot.y = _rot.z = 0;
+			_rot.x = _rotationX;
+			_rot.y = _rotationY;
+			_rot.z = _rotationZ;
 			
 			_sca.x = _scaleX;
 			_sca.y = _scaleY;
 			_sca.z = _scaleZ;
 			
-			_transform.recompose(Vector.<Vector3D>([_pos, _rot, _sca]));
-			
-			if (_pivotPoint != null)
+			if(_pivotPoint == null)
 			{
-				_transform.appendRotation(rotationX, Vector3D.X_AXIS, _pivotPoint);
-				_transform.appendRotation(rotationY, Vector3D.Y_AXIS, _pivotPoint);
-				_transform.appendRotation(rotationZ, Vector3D.Z_AXIS, _pivotPoint);
+				_transform.recompose(Vector.<Vector3D>([_pos, _rot, _sca]));
+			}
+			else
+			{
+				_transform.recompose(Vector.<Vector3D>([new Vector3D(_pivotPoint.x*_scaleX, _pivotPoint.y*_scaleY, _pivotPoint.z*_scaleZ), _rot, _sca]));
+				_transform.prependTranslation(-_pivotPoint.x + _pos.x, -_pivotPoint.y + _pos.y, -_pivotPoint.z + _pos.z);
 			}
 			
 			_transformDirty = false;
