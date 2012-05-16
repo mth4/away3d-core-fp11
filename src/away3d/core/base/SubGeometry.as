@@ -38,6 +38,7 @@
 		
 		// buffers:
 		protected var _selectors:Vector.<VertexBufferSelector> = new Vector.<VertexBufferSelector>();
+		protected var _numSelectors:uint;
 		
 		protected var _positionsBuffer:VertexBufferProxy;
 		protected var _normalsBuffer:VertexBufferProxy;
@@ -186,6 +187,7 @@
 					break;
 			}
 			
+			_numSelectors++;
 			buffer.addOwner(this);		// may add ownership multiple times (for each selector) for one buffer
 			_selectors.push(selector);
 		}
@@ -215,6 +217,7 @@
 					if(_normalsBuffer == buffer) _normalsBuffer = null;
 					if(_tangentsBuffer == buffer) _tangentsBuffer = null;
 					
+					_numSelectors--;
 					buffer.removeOwner(this);
 					
 					return;
@@ -301,7 +304,7 @@
 					index--;
 				}
 			
-			// if not found, in some cases it should be automatically generated
+			// if not found, in some cases it should be automatically generated (getters below do the job)
 			switch(usage)
 			{
 				case VertexBufferUsages.NORMALS: return normalsProxy.selectors[0];
@@ -309,6 +312,30 @@
 			}
 			
 			return null;
+		}
+		
+		public function getVertexBufferSelectorAt(index:uint):VertexBufferSelector
+		{
+			return _selectors[index];
+		}
+		
+		public function get numSelectors():uint
+		{
+			return _numSelectors;
+		}
+		
+		public function getReferencedVertexBuffers():Vector.<VertexBufferProxy>
+		{
+			var vec:Vector.<VertexBufferProxy> = new Vector.<VertexBufferProxy>();
+			
+			for each(var selector:VertexBufferSelector in _selectors)
+			{
+				var buffer:VertexBufferProxy = selector.bufferProxy;
+				if(vec.indexOf(buffer) == -1)
+					vec.push(buffer);
+			}
+			
+			return vec;
 		}
 		
 		/**

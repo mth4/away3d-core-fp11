@@ -96,6 +96,8 @@ package away3d.core.base.buffers
 		{
 			disposeBuffers();
 			
+			_owners = null;
+			
 			_buffers = null;
 			_buffersDirtyRanges = null;
 			_data = null;
