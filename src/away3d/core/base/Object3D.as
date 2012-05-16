@@ -353,7 +353,6 @@ package away3d.core.base
 		public function set transform(val:Matrix3D) : void
 		{
 			var vec : Vector3D;
-			var c : Matrix3D;
 			
 			//ridiculous matrix error
 			if (!val.rawData[uint(0)]) {
@@ -365,12 +364,14 @@ package away3d.core.base
 			
 			_transform = val;
 			
+			var elements : Vector.<Vector3D>;
+			
 			if(_pivotPoint != null)
 			{
-				c = new Matrix3D();
+				var c : Matrix3D = new Matrix3D();
 				c.copyFrom(val);
 				
-				var s:Vector3D = c.decompose()[1];
+				var s:Vector3D = c.decompose()[2];
 				c.prependTranslation(_pivotPoint.x, _pivotPoint.y, _pivotPoint.z);
 				c.appendTranslation(-_pivotPoint.x * s.x, -_pivotPoint.y * s.y, -_pivotPoint.z * s.z);
 				
@@ -379,11 +380,11 @@ package away3d.core.base
 				m.invert();
 				m.position = new Vector3D();
 				vec = m.transformVector(c.position);
+				
+				val = c;
 			}
-			else
-				c = val;
 			
-			var elements : Vector.<Vector3D> = c.decompose();
+			elements = val.decompose();
 			
 			if(_pivotPoint == null)
 				vec = elements[0];
@@ -832,7 +833,7 @@ package away3d.core.base
 			else
 			{
 				_transform.recompose(Vector.<Vector3D>([new Vector3D(_pivotPoint.x*_scaleX, _pivotPoint.y*_scaleY, _pivotPoint.z*_scaleZ), _rot, _sca]));
-				_transform.prependTranslation(-_pivotPoint.x + _pos.x, -_pivotPoint.y + _pos.y, -_pivotPoint.z + _pos.z);
+				_transform.prependTranslation(-_pivotPoint.x + _x, -_pivotPoint.y + _y, -_pivotPoint.z + _z);
 			}
 			
 			_transformDirty = false;
