@@ -154,7 +154,7 @@ package away3d.core.base.buffers
 				
 				if(ranges == null)
 				{
-					_buffersDirtyRanges[i] = Vector.<Number>([new Range(startVertex, endVertex)]);
+					_buffersDirtyRanges[i] = Vector.<Range>([new Range(startVertex, endVertex)]);
 					continue;
 				}
 				
