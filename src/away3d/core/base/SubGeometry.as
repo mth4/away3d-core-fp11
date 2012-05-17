@@ -587,7 +587,10 @@
 			if(_positionsBuffer == null)
 				addVertexBuffer(new VertexBufferProxy(VertexBufferUsages.POSITIONS, vertices, 3));
 			else
+			{
 				_positionsBuffer.data = vertices;
+				_positionsBuffer.invalidateContent();		// that method should invalidate content, even if it is the same vector
+			}
 		}
 		
 		/**
@@ -599,7 +602,10 @@
 			if(_mainUVBuffer == null)
 				addVertexBuffer(new VertexBufferProxy(VertexBufferUsages.UV, uvs, 2));
 			else
+			{
 				_mainUVBuffer.data = uvs;
+				_mainUVBuffer.invalidateContent();
+			}
 		}
 		
 		/**
@@ -611,7 +617,10 @@
 			if(selector == null)
 				addVertexBuffer(new VertexBufferProxy(VertexBufferUsages.UV, uvs, 2));
 			else
+			{
 				selector.bufferProxy.data = uvs;
+				selector.bufferProxy.invalidateContent();
+			}
 		}
 		
 		/**
@@ -627,7 +636,10 @@
 			if(_normalsBuffer == null)
 				addVertexBuffer(new VertexBufferProxy(VertexBufferUsages.NORMALS, vertexNormals, 3));
 			else
+			{
 				_normalsBuffer.data = vertexNormals;
+				_normalsBuffer.invalidateContent();
+			}
 		}
 		
 		/**
@@ -643,7 +655,10 @@
 			if(_tangentsBuffer == null)
 				addVertexBuffer(new VertexBufferProxy(VertexBufferUsages.TANGENTS, vertexTangents, 3));
 			else
+			{
 				_tangentsBuffer.data = vertexTangents;
+				_tangentsBuffer.invalidateContent();
+			}
 		}
 		
 		/**
@@ -655,7 +670,10 @@
 			if(_indexBuffer == null)
 				indexBufferProxy = new IndexBufferProxy(indices);
 			else
+			{
 				_indexBuffer.indices = indices;
+				_indexBuffer.invalidateContent();
+			}
 		}
 		
 		/**
